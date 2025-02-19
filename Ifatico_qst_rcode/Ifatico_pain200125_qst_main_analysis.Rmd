@@ -1,0 +1,1348 @@
+---
+title: "Ifatico Pain"
+author: "JR"
+date: "2024-07-29"
+output: html_document
+---
+
+
+load packages
+```{r message=FALSE, warning=FALSE}
+library(compareGroups)
+library(PairedData)
+library(readxl)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(Rmisc) 
+library(readxl)
+library(ggpubr) 
+library(rstatix) 
+library(WRS2)
+library(dplyr) 
+library(effectsize)
+library(dplyr)
+library(MOTE)
+library(colorspace)
+library(readr)
+```
+
+
+Load  data
+```{r}
+all_data <- readRDS(file = "all_data.rds")
+```
+
+
+############################################### PDT 
+
+Create Boxplot
+```{r}
+pdt_plot <- ggviolin(all_data, x = "gruppe", y = "qst_cuff_1_pdt",
+   fill = "gruppe",
+   palette = c("#00AFBB","#FC4E07"),
+   color = "gruppe",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Post-Covid")) + rremove("legend")
+
+pdt_plot_final <- ggpar(pdt_plot, ylim = c(0,100))
+#pdt_plot_final
+add_summary(pdt_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outliers and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::identify_outliers(qst_cuff_1_pdt) %>% select(id,qst_cuff_1_pdt,is.outlier,is.extreme)
+
+all_data  %>%
+  group_by(gruppe) %>%
+  shapiro_test(qst_cuff_1_pdt)
+```
+Result: No extreme outlier
+Pc Data are not normally distributed
+
+Test for equal variances
+```{r}
+pdt_variance <- if(all_data %>%
+rstatix::levene_test(qst_cuff_1_pdt ~ gruppe) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(qst_cuff_1_pdt ~ gruppe)
+```
+
+T-test
+```{r}
+all_data %>% rstatix::t_test(
+         qst_cuff_1_pdt ~ gruppe, 
+         paired = FALSE, 
+         p.adjust.method = "none",
+         var.equal = pdt_variance,
+         detailed = FALSE)
+```
+
+
+Wilcox test
+```{r}
+all_data %>% rstatix::wilcox_test(
+         qst_cuff_1_pdt ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none")
+```
+==> Same result as T-test (both significant)
+
+
+Choose BCA because recommended by different sources: https://www.r-bloggers.com/2019/09/understanding-bootstrap-confidence-interval-output-from-the-r-boot-package/
+https://besjournals.onlinelibrary.wiley.com/doi/pdf/10.1111/1365-2656.12382
+Dont use hedges correction because no consistent recommendation in literature
+
+Get effect size and bootsrapped ci
+```{r}
+set.seed(777)
+all_data %>% rstatix::cohens_d(
+  qst_cuff_1_pdt ~ gruppe,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = pdt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+############################################### PTT 
+
+Create boxplot
+```{r}
+ptt_plot <- ggviolin(all_data, x = "gruppe", y = "qst_cuff_1_ptt",
+   fill = "gruppe",
+   palette = c("#00AFBB","#FC4E07"),
+   color = "gruppe",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black", size = 1),
+   title = "PTT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Post-Covid")) + rremove("legend")
+
+ptt_plot_final <- ggpar(ptt_plot, ylim = c(0,100))
+#ptt_plot_final
+add_summary(ptt_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outliers and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::identify_outliers(qst_cuff_1_ptt) %>% select(id,qst_cuff_1_ptt,is.outlier,is.extreme)
+
+all_data  %>%
+  group_by(gruppe) %>%
+  shapiro_test(qst_cuff_1_ptt)
+```
+
+=> No outliers
+=> Data are not normal distributed
+
+Test for equal variances
+```{r}
+ptt_variance <- if(all_data %>%
+rstatix::levene_test(qst_cuff_1_ptt ~ gruppe) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(qst_cuff_1_ptt ~ gruppe)
+```
+
+T-test
+```{r}
+all_data %>% rstatix::t_test(
+         qst_cuff_1_ptt  ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none",var.equal = ptt_variance, detailed = FALSE)
+```
+
+Wilcox-Test
+```{r}
+all_data %>% rstatix::wilcox_test(
+         qst_cuff_1_ptt ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none")
+```
+==> No dif. between t-test and Wilcox Test
+
+Get effect size and bootsrapped ci
+```{r}
+set.seed(777)
+all_data %>% rstatix::cohens_d(
+  qst_cuff_1_ptt ~ gruppe,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = ptt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+############################################### TSP
+
+### Pre analysis
+
+Create long df with paired variables
+```{r}
+tsp_long <- all_data %>% select(id,gruppe,tsp1,tsp2) %>% pivot_longer(cols = c("tsp2","tsp1"), names_to = "tsp_condition", values_to = "tsp_value") %>% mutate(
+                                                                                        combined = paste0(gruppe,tsp_condition))
+
+table(tsp_long$combined)
+tsp_long$combined <- car::recode(tsp_long$combined,"'HCtsp1' = 'HC Pre';'HCtsp2' = 'HC Post';'Post-Covidtsp1' = 'Post-Covid Pre';'Post-Covidtsp2' = 'Post-Covid Post'")
+tsp_long <- tsp_long %>% mutate(tsp_condition = as.factor(tsp_condition),
+                                combined = as.factor(combined)) 
+```
+Create long_df to plot
+```{r}
+tsp_line_long <- all_data %>% select(id,gruppe,pain,f_group,mecfs,qst_temporal_1:qst_temporal_10) %>% pivot_longer(cols = qst_temporal_1:qst_temporal_10,names_to = "timepoint",values_to = "VAS.Rating") %>% mutate(timepoint = sub("qst_temporal_","",timepoint))
+```
+
+
+Mean and standard error.. not deviation!
+TSP line plot
+```{r}
+tsp_line_plot1 <- ggline(tsp_line_long, x = "timepoint", y = "VAS.Rating", color = "gruppe",
+ add = "mean_se", palette = c("#00AFBB","#FC4E07")) 
+
+tsp_line_plot1 <- ggpar(tsp_line_plot1, ylim = c(0,10))
+tsp_line_plot1
+```
+
+Compare pc and hc at every timepoint
+```{r}
+tsp_table <- compareGroups::compareGroups (gruppe ~ qst_temporal_1 + qst_temporal_2 + qst_temporal_3 + qst_temporal_4 + qst_temporal_5 + qst_temporal_6 + qst_temporal_7 + qst_temporal_8 + qst_temporal_9 + qst_temporal_10, data = all_data)
+createTable(tsp_table)
+```
+Create boxplots for pre and post (tsp1 and tsp2)
+```{r}
+tsp_plot <- ggviolin(tsp_long, x = "combined", y = "tsp_value",
+   fill = "combined",
+   combine = TRUE,  
+   palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2),"#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)),
+   color = "combined", #tsp_condition
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(size = 1 ,fill = "white",color = "black"),
+   title = "TSP values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("TSP"),
+  trim = TRUE,
+order = c("HC Pre","HC Post","Post-Covid Pre","Post-Covid Post")
+  ) + rremove("legend")
+
+tsp_plot_final <- ggpar(tsp_plot, ylim = c(0,10))
+#tsp_plot_final
+add_summary(tsp_plot_final, "mean", color = "black",size = 0.5)
+```
+Create additional paired plot for hc
+```{r}
+before_hc_tsp <- tsp_long %>% arrange(id) %>% filter(gruppe == "HC", tsp_condition == "tsp1") %>% pull(tsp_value)
+# subset weight data after treatment
+after_hc_tsp <- tsp_long %>% arrange(id)  %>% filter(gruppe == "HC", tsp_condition == "tsp2") %>% pull(tsp_value)
+# Plot paired data
+pd_hc_tsp <- paired(before_hc_tsp, after_hc_tsp)
+hc_tsp_pp <- ggpaired(pd_hc_tsp, cond1 = "before_hc_tsp", cond2 = "after_hc_tsp",
+fill = "condition", palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2)))
+hc_tsp_pp <- ggpar(hc_tsp_pp, ylim = c(0,10))
+hc_tsp_pp 
+```
+Create additional paired plot for pc
+```{r}
+before_pc_tsp <- tsp_long %>% arrange(id) %>% filter(gruppe == "Post-Covid", tsp_condition == "tsp1") %>% pull(tsp_value)
+# subset weight data after treatment
+after_pc_tsp <- tsp_long %>% arrange(id)  %>% filter(gruppe == "Post-Covid", tsp_condition == "tsp2") %>% pull(tsp_value)
+# Plot paired data
+
+pd_pc_tsp <- paired(before_pc_tsp, after_pc_tsp)
+pc_tsp_pp <- ggpaired(pd_pc_tsp, cond1 = "before_pc_tsp", cond2 = "after_pc_tsp",
+fill = "condition", palette = c("#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)))
+pc_tsp_pp <- ggpar(pc_tsp_pp, ylim = c(0,10))
+pc_tsp_pp
+```
+Search for extreme outliers and test for normal distribution
+```{r}
+tsp_long %>%
+  dplyr::group_by(gruppe, tsp_condition) %>%
+  rstatix::identify_outliers(tsp_value) %>% select(id,tsp_value,is.outlier,is.extreme)
+
+tsp_long %>%
+  group_by(gruppe, tsp_condition) %>%
+  shapiro_test(tsp_value)
+```
+
+No outlier
+Data are not normal distributed for tsp1 in both groups
+
+
+Test for equal variances
+```{r}
+tsp_variance_hc <- if(tsp_long %>% dplyr::group_by(gruppe) %>%
+               rstatix::levene_test(tsp_value ~ tsp_condition) %>% filter(gruppe == "HC") %>% select(p) > 0.05){TRUE} else {FALSE}
+tsp_long %>% dplyr::group_by(gruppe) %>%
+               rstatix::levene_test(tsp_value ~ tsp_condition)
+tsp_variance_pc <- if(tsp_long %>% dplyr::group_by(gruppe) %>%
+               rstatix::levene_test(tsp_value ~ tsp_condition) %>% filter(gruppe == "Post-Covid") %>% select(p) > 0.05){TRUE} else {FALSE}
+tsp_long %>% dplyr::group_by(gruppe) %>%
+               rstatix::levene_test(tsp_value ~ tsp_condition)
+```
+variances are equal
+
+Paired T-Test and paired wilcox test
+```{r}
+tsp_long %>% arrange(id) %>% dplyr::group_by(gruppe) %>%
+        rstatix::t_test(
+         tsp_value ~ tsp_condition, paired = TRUE, 
+         p.adjust.method = "none",var.equal = TRUE)
+
+tsp_long %>% arrange(id) %>%  dplyr::group_by(gruppe) %>%
+        rstatix::wilcox_test(
+         tsp_value ~ tsp_condition, paired = TRUE, 
+         p.adjust.method = "none")
+
+```
+No dif. between t test and wilcox test (both significant for both groups)
+
+Get effect size and bootstrapped ci
+```{r}
+set.seed(777)
+tsp_long %>% arrange(id) %>% group_by(gruppe) %>% rstatix::cohens_d(
+  tsp_value ~ tsp_condition,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = TRUE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+############  TSP Main Analysis
+
+Create boxplot
+```{r}
+tsp_main_plot <- ggviolin(all_data, x = "gruppe", y = "tsp",
+   fill = "gruppe",
+   palette = c("#00AFBB","#FC4E07"),
+   color = "gruppe",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black", size = 1),
+   title = "TSP values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("TSP"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Post-Covid")) + rremove("legend")
+
+tsp_main_plot_final <- ggpar(tsp_main_plot, ylim = c(-10,10))
+#ptt_plot_final
+add_summary(tsp_main_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::shapiro_test(tsp)
+
+all_data %>%
+  group_by(gruppe) %>%
+  identify_outliers(tsp) %>% select(id,tsp,is.outlier,is.extreme)
+
+```
+
+Post Covid data not normal distributed
+One extreme outlier
+
+Test for equal variances
+```{r}
+tsp_variance <- if(all_data %>% rstatix::levene_test(tsp ~ gruppe) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>% rstatix::levene_test(tsp ~ gruppe)
+```
+
+T-test and wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         tsp ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none", var.equal = tsp_variance)
+all_data %>% rstatix::wilcox_test(
+         tsp ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none")
+```
+T-test is not significant but wilcox-test is 
+
+Sensitivity Analysis
+```{r}
+out_tsp_id <- all_data %>%
+  group_by(gruppe) %>%
+  identify_outliers(tsp) %>% filter(is.extreme == TRUE) %>% pull(id)
+
+all_data %>% filter(!id %in% out_tsp_id) %>% rstatix::t_test(
+         tsp ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none",var.equal = tsp_variance)
+
+all_data %>% filter(!id %in% out_tsp_id) %>% rstatix::wilcox_test(
+         tsp ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none")
+```
+After excluding the extreme outlier, both test are significant
+
+
+Effect size no sen. A
+```{r}
+set.seed(777)
+all_data  %>% rstatix::cohens_d(
+  tsp ~ gruppe,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = tsp_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+Effect size sensitivity analysis
+```{r}
+set.seed(777)
+all_data %>% filter(!id %in% out_tsp_id) %>% rstatix::cohens_d(
+  tsp ~ gruppe,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = tsp_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+############################### CPM
+
+
+####   PDT Pre-Analysis
+
+Create long df
+```{r}
+cpm_pdt_long <- all_data %>% dplyr::select(id,gruppe,qst_cuff_1_pdt,qst_cpm_pdt) %>% tidyr::pivot_longer(cols = c("qst_cuff_1_pdt","qst_cpm_pdt"), names_to = "cpm_pdt_condition", values_to = "cpm_pdt_value") %>% dplyr::mutate(combined = paste0(gruppe,cpm_pdt_condition))
+table(cpm_pdt_long$combined)
+cpm_pdt_long$combined <- car::recode(cpm_pdt_long$combined,"'HCqst_cuff_1_pdt' = 'HC Pre';'HCqst_cpm_pdt' = 'HC Post';'Post-Covidqst_cuff_1_pdt' = 'Post-Covid Pre';'Post-Covidqst_cpm_pdt' = 'Post-Covid Post'")
+cpm_pdt_long <- cpm_pdt_long %>% dplyr::mutate(cpm_pdt_condition = as.factor(cpm_pdt_condition),
+                                 combined = as.factor(combined)) 
+```
+
+Plot paired results
+```{r}
+cpm_pdt_plot <- ggviolin(cpm_pdt_long, x = "combined", y = "cpm_pdt_value",
+   fill = "combined",
+   combine = TRUE,  
+   palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2),"#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)),
+   color = "combined", #tsp_condition
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(size = 1 ,fill = "white",color = "black"),
+   title = "CPM PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PDT"),
+  trim = TRUE,
+order = c("HC Pre","HC Post","Post-Covid Pre","Post-Covid Post")
+  ) + rremove("legend")
+
+cpm_pdt_plot_final <- ggpar(cpm_pdt_plot, ylim = c(0,100))
+#cpm_pdt_plot_final
+add_summary(cpm_pdt_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Create additional paired plot
+```{r}
+before_hc_cpm_pdt <- cpm_pdt_long %>% arrange(id) %>% dplyr::filter(gruppe == "HC", cpm_pdt_condition == "qst_cuff_1_pdt") %>% pull(cpm_pdt_value)
+# subset weight data after treatment
+after_hc_cpm_pdt <- cpm_pdt_long %>% arrange(id)  %>% dplyr::filter(gruppe == "HC", cpm_pdt_condition == "qst_cpm_pdt") %>% pull(cpm_pdt_value)
+# Plot paired data
+pd_hc_cpm_pdt <- paired(before_hc_cpm_pdt, after_hc_cpm_pdt)
+hc_cpm_pdt_pp <- ggpaired(pd_hc_cpm_pdt, cond1 = "before_hc_cpm_pdt", cond2 = "after_hc_cpm_pdt",
+fill = "condition", palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2)))
+hc_cpm_pdt_pp <- ggpar(hc_cpm_pdt_pp, ylim = c(0,100))
+hc_cpm_pdt_pp
+```
+
+Create additional paired plot
+```{r}
+before_pc_cpm_pdt <- cpm_pdt_long %>% arrange(id) %>% filter(gruppe == "Post-Covid", cpm_pdt_condition == "qst_cuff_1_pdt") %>% pull(cpm_pdt_value)
+# subset weight data after treatment
+after_pc_cpm_pdt <- cpm_pdt_long %>% arrange(id)  %>% filter(gruppe == "Post-Covid", cpm_pdt_condition == "qst_cpm_pdt") %>% pull(cpm_pdt_value)
+# Plot paired data
+pd_pc_cpm_pdt <- paired(before_pc_cpm_pdt, after_pc_cpm_pdt)
+pc_cpm_pdt_pp <- ggpaired(pd_pc_cpm_pdt, cond1 = "before_pc_cpm_pdt", cond2 = "after_pc_cpm_pdt",
+fill = "condition", palette = c("#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)))
+pc_cpm_pdt_pp <- ggpar(pc_cpm_pdt_pp, ylim = c(0,100))
+pc_cpm_pdt_pp
+```
+
+Test for equal variances
+```{r}
+cpm_pdt_hc_variance <- if(cpm_pdt_long %>% dplyr::filter(gruppe == "HC") %>%
+rstatix::levene_test(cpm_pdt_value ~ cpm_pdt_condition) %>% dplyr::select(p) > 0.05){TRUE} else {FALSE}
+cpm_pdt_long %>% dplyr::filter(gruppe == "HC") %>%
+rstatix::levene_test(cpm_pdt_value ~ cpm_pdt_condition)
+cpm_pdt_pc_variance <- if(cpm_pdt_long %>% dplyr::filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(cpm_pdt_value ~ cpm_pdt_condition) %>% dplyr::select(p) > 0.05){TRUE} else {FALSE}
+cpm_pdt_long %>% dplyr::filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(cpm_pdt_value ~ cpm_pdt_condition)
+```
+
+```{r}
+cpm_pdt_long %>%
+  dplyr::group_by(gruppe, cpm_pdt_condition) %>%
+  rstatix::identify_outliers(cpm_pdt_value) %>% dplyr::select(id,gruppe,is.outlier,is.extreme)
+
+cpm_pdt_long %>%
+  group_by(gruppe, cpm_pdt_condition) %>%
+  shapiro_test(cpm_pdt_value)
+```
+#Post Covid not normal distributed
+#HC data are normal distributed
+# No extreme outlier for both groups
+
+T-test and Wilcox test
+```{r}
+cpm_pdt_long %>% arrange(id) %>% dplyr::filter(gruppe == "HC") %>%
+        rstatix::t_test(
+         cpm_pdt_value ~ cpm_pdt_condition, paired = TRUE,var.equal = cpm_pdt_hc_variance,  
+         p.adjust.method = "none")
+
+cpm_pdt_long %>% arrange(id) %>% dplyr::filter(gruppe == "Post-Covid") %>%
+        rstatix::t_test(
+         cpm_pdt_value ~ cpm_pdt_condition, paired = TRUE, var.equal = cpm_pdt_pc_variance, 
+         p.adjust.method = "none")
+
+
+cpm_pdt_long %>% arrange(id) %>% dplyr::filter(gruppe == "Post-Covid") %>%
+        rstatix::wilcox_test(
+         cpm_pdt_value ~ cpm_pdt_condition, paired = TRUE, 
+         p.adjust.method = "none")
+```
+
+#No dif between T-test and wilcox test for post covid --> Both not significant
+
+
+Effect size sensitivity analysis
+```{r}
+set.seed(777)
+cpm_pdt_long %>% filter(gruppe == "HC") %>% rstatix::cohens_d(
+  cpm_pdt_value ~ cpm_pdt_condition,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = TRUE,
+ # mu = 0,
+  var.equal = cpm_pdt_hc_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+#######################  CPM PDT Main Analysis
+```{r}
+cpm_pdt_main_plot <- ggviolin(all_data, x = "gruppe", y = "cpm_dif_pdt",
+   fill = "gruppe",
+   palette = c("#00AFBB","#FC4E07"),
+   color = "gruppe",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black", size = 1),
+   title = "CPM PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Post-Covid")) + rremove("legend")
+
+cpm_pdt_main_plot_final <- ggpar(cpm_pdt_main_plot, ylim = c(-30,100))
+#ptt_plot_final
+add_summary(cpm_pdt_main_plot_final, "mean", color = "black",size = 0.5)
+```
+
+
+```{r}
+cpm_pdt_main_variance <- if(all_data %>%
+rstatix::levene_test(cpm_dif_pdt ~ gruppe) %>% dplyr::select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(cpm_dif_pdt ~ gruppe)
+```
+Test for normal distribution and test for extreme outlier
+```{r}
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::shapiro_test(cpm_dif_pdt)
+
+ all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::identify_outliers(cpm_dif_pdt) %>% dplyr::select(id,gruppe,cpm_dif_pdt,is.outlier,is.extreme)
+```
+Data are normal distributed
+No extreme outlier
+
+```{r}
+all_data %>% rstatix::t_test(
+         cpm_dif_pdt ~ gruppe, paired = FALSE,var.equal = cpm_pdt_main_variance,
+         p.adjust.method = "none")
+
+```
+t test is not significant!
+
+
+
+############## CPM PTT
+
+
+########  Pre-Analysis
+
+Creae long df
+```{r}
+cpm_ptt_long <- all_data %>% dplyr::select(id,gruppe,qst_cuff_1_ptt,qst_cpm_ptt) %>% tidyr::pivot_longer(cols = c("qst_cuff_1_ptt","qst_cpm_ptt"), names_to = "cpm_ptt_condition", values_to = "cpm_ptt_value") %>% dplyr::mutate(combined = paste0(gruppe,cpm_ptt_condition))
+table(cpm_ptt_long$combined)
+cpm_ptt_long$combined <- car::recode(cpm_ptt_long$combined,"'HCqst_cuff_1_ptt' = 'HC Pre';'HCqst_cpm_ptt' = 'HC Post';'Post-Covidqst_cuff_1_ptt' = 'Post-Covid Pre';'Post-Covidqst_cpm_ptt' = 'Post-Covid Post'")
+cpm_ptt_long <- cpm_ptt_long %>% dplyr::mutate(cpm_ptt_condition = as.factor(cpm_ptt_condition),
+                                 combined = as.factor(combined)) 
+```
+
+Plot paired results
+```{r}
+cpm_ptt_plot <- ggviolin(cpm_ptt_long, x = "combined", y = "cpm_ptt_value",
+   fill = "combined",
+   combine = TRUE,  
+   palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2),"#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)),
+   color = "combined", #tsp_condition
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(size = 1 ,fill = "white",color = "black"),
+   title = "CPM PTT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PTT"),
+  trim = TRUE,
+order = c("HC Pre","HC Post","Post-Covid Pre","Post-Covid Post")
+  ) + rremove("legend")
+
+cpm_ptt_plot_final <- ggpar(cpm_ptt_plot, ylim = c(0,100))
+#cpm_ptt_plot_final
+add_summary(cpm_ptt_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Create additional paired plot
+```{r}
+before_hc_cpm_ptt <- cpm_ptt_long %>% arrange(id) %>% dplyr::filter(gruppe == "HC", cpm_ptt_condition == "qst_cuff_1_ptt") %>% pull(cpm_ptt_value)
+# subset weight data after treatment
+after_hc_cpm_ptt <- cpm_ptt_long %>% arrange(id)  %>% dplyr::filter(gruppe == "HC", cpm_ptt_condition == "qst_cpm_ptt") %>% pull(cpm_ptt_value)
+# Plot paired data
+pd_hc_cpm_ptt <- paired(before_hc_cpm_ptt, after_hc_cpm_ptt)
+hc_cpm_ptt_pp <- ggpaired(pd_hc_cpm_ptt, cond1 = "before_hc_cpm_ptt", cond2 = "after_hc_cpm_ptt",
+fill = "condition", palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2)))
+hc_cpm_ptt_pp <- ggpar(hc_cpm_ptt_pp, ylim = c(0,100))
+hc_cpm_ptt_pp
+```
+
+Create additional paired plot
+```{r}
+before_pc_cpm_ptt <- cpm_ptt_long %>% arrange(id) %>% filter(gruppe == "Post-Covid", cpm_ptt_condition == "qst_cuff_1_ptt") %>% pull(cpm_ptt_value)
+# subset weight data after treatment
+after_pc_cpm_ptt <- cpm_ptt_long %>% arrange(id)  %>% filter(gruppe == "Post-Covid", cpm_ptt_condition == "qst_cpm_ptt") %>% pull(cpm_ptt_value)
+# Plot paired data
+pd_pc_cpm_ptt <- paired(before_pc_cpm_ptt, after_pc_cpm_ptt)
+pc_cpm_ptt_pp <- ggpaired(pd_pc_cpm_ptt, cond1 = "before_pc_cpm_ptt", cond2 = "after_pc_cpm_ptt",
+fill = "condition", palette = c("#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)))
+pc_cpm_ptt_pp <- ggpar(pc_cpm_ptt_pp, ylim = c(0,100))
+pc_cpm_ptt_pp
+```
+
+Test for normal distribution and test for extreme outlier
+```{r}
+cpm_ptt_long %>%
+  dplyr::group_by(gruppe, cpm_ptt_condition) %>%
+  rstatix::identify_outliers(cpm_ptt_value) %>% dplyr::select(id,gruppe,cpm_ptt_value,is.outlier,is.extreme)
+
+ cpm_ptt_long %>%
+  group_by(gruppe, cpm_ptt_condition) %>%
+  shapiro_test(cpm_ptt_value)
+```
+--> no outlier
+--> data are not normal distributed
+
+```{r}
+cpm_ptt_hc_variance <- if(cpm_ptt_long %>% filter(gruppe == "HC") %>%
+rstatix::levene_test(cpm_ptt_value ~ cpm_ptt_condition) %>% dplyr::select(p) > 0.05){TRUE} else {FALSE}
+cpm_ptt_long %>% filter(gruppe == "HC") %>%
+rstatix::levene_test(cpm_ptt_value ~ cpm_ptt_condition)
+cpm_ptt_pc_variance <- if(cpm_ptt_long %>% filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(cpm_ptt_value ~ cpm_ptt_condition) %>% dplyr::select(p) > 0.05){TRUE} else {FALSE}
+cpm_ptt_long %>% filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(cpm_ptt_value ~ cpm_ptt_condition)
+```
+
+```{r}
+cpm_ptt_long %>% arrange(id) %>% dplyr::group_by(gruppe) %>%
+        rstatix::t_test(
+         cpm_ptt_value ~ cpm_ptt_condition, paired = TRUE, 
+         p.adjust.method = "none")
+
+
+cpm_ptt_long %>% arrange(id) %>% dplyr::group_by(gruppe) %>%
+        rstatix::wilcox_test(
+         cpm_ptt_value ~ cpm_ptt_condition, paired = TRUE, 
+         p.adjust.method = "none")
+```
+Cave: one person has missing values in post covid group --> report in paper
+--> no dif between t-test and wilcox test: Both significant for both groups
+
+
+Effect size sensitivity analysis
+```{r}
+set.seed(777)
+cpm_ptt_long %>% arrange(id) %>% dplyr::group_by(gruppe) %>% rstatix::cohens_d(
+  cpm_ptt_value ~ cpm_ptt_condition,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = TRUE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+################## CPM PTT Main Analysis
+```{r}
+cpm_ptt_main_plot <- ggviolin(all_data, x = "gruppe", y = "cpm_dif_ptt",
+   fill = "gruppe",
+   palette = c("#00AFBB","#FC4E07"),
+   color = "gruppe",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black", size = 1),
+   title = "CPM PTT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Post-Covid")) + rremove("legend")
+
+cpm_ptt_main_plot_final <- ggpar(cpm_ptt_main_plot, ylim = c(-30,100))
+#ptt_plot_final
+add_summary(cpm_ptt_main_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::identify_outliers(cpm_dif_ptt) %>% dplyr::select(id,gruppe,cpm_dif_ptt,is.outlier,is.extreme)
+
+ all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::shapiro_test(cpm_dif_ptt)
+```
+--> no extreme outlier
+--> HC data not normal distributed
+
+
+```{r}
+cpm_ptt_main_variance <- if(all_data %>%
+rstatix::levene_test(cpm_dif_ptt ~ gruppe) %>% dplyr::select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(cpm_dif_ptt ~ gruppe)
+```
+
+```{r}
+all_data %>% rstatix::t_test(
+         cpm_dif_ptt ~ gruppe, paired = FALSE, var.equal = cpm_ptt_main_variance,
+         p.adjust.method = "none", detailed = FALSE)
+
+all_data  %>% rstatix::wilcox_test(
+         cpm_dif_ptt ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+--> t-test and wilcox test are not significant
+
+
+########  CPM additional analysis (direction of cpm effect)
+
+Direction of pdt effect
+```{r}
+tab_cpm_pdt_effect_hc <- table(all_data %>% dplyr::filter(gruppe == "HC") %>% pull(cpm_pdt_effect))
+tab_cpm_pdt_effect_cp <- table(all_data %>% dplyr::filter(gruppe == "Post-Covid") %>% pull(cpm_pdt_effect))
+
+tab_cpm_pdt_effect_hc_per <- tab_cpm_pdt_effect_hc / 50
+tab_cpm_pdt_effect_cp_per <- tab_cpm_pdt_effect_cp / 83
+
+tab_cpm_pdt_effect_hc
+tab_cpm_pdt_effect_hc_per
+tab_cpm_pdt_effect_cp
+tab_cpm_pdt_effect_cp_per
+```
+Fishers test over all cells
+```{r}
+stats::fisher.test(all_data$cpm_pdt_effect,all_data$gruppe)
+```
+Direction of PTT effect
+```{r}
+tab_cpm_ptt_effect_hc <- table(all_data %>% dplyr::filter(gruppe == "HC") %>% pull(cpm_ptt_effect))
+tab_cpm_ptt_effect_cp <- table(all_data %>% dplyr::filter(gruppe == "Post-Covid") %>% pull(cpm_ptt_effect))
+
+tab_cpm_ptt_effect_hc_per <- tab_cpm_ptt_effect_hc / 50
+tab_cpm_ptt_effect_cp_per <- tab_cpm_ptt_effect_cp / 83
+
+tab_cpm_ptt_effect_hc
+tab_cpm_ptt_effect_hc_per
+tab_cpm_ptt_effect_cp
+tab_cpm_ptt_effect_cp_per
+```
+
+Fishers test over all cells
+```{r}
+stats::fisher.test(all_data$cpm_ptt_effect,all_data$gruppe)
+```
+How many reached 100
+```{r}
+table(all_data$qst_cuff_1_ptt)
+table(all_data$qst_cpm_ptt)
+```
+
+#########################   Spatial Summation of Pain  
+
+############## SSP PDT Pre analysis
+
+Create long df
+```{r}
+ssp_pdt_long <- all_data %>% dplyr::select(id,gruppe,ssp_baseline_pdt,qst_spatial_pdt) %>% 
+                             tidyr::pivot_longer(cols = c("ssp_baseline_pdt","qst_spatial_pdt"), names_to =  
+                                                "ssp_pdt_condition", values_to = "ssp_pdt_value") %>% 
+                             dplyr::mutate(combined = paste0(gruppe,ssp_pdt_condition))
+
+table(ssp_pdt_long$combined)
+
+ssp_pdt_long$combined <- car::recode(ssp_pdt_long$combined,"'HCssp_baseline_pdt' = 'HC Pre';'HCqst_spatial_pdt' = 'HC Post';'Post-Covidssp_baseline_pdt' = 'Post-Covid Pre';'Post-Covidqst_spatial_pdt' = 'Post-Covid Post'")
+
+ssp_pdt_long <- ssp_pdt_long %>% dplyr::mutate(ssp_pdt_condition = as.factor(ssp_pdt_condition),
+                                 combined = as.factor(combined)) 
+```
+
+
+Plot paired results
+```{r}
+ssp_pdt_plot <- ggviolin(ssp_pdt_long, x = "combined", y = "ssp_pdt_value",
+   fill = "combined",
+   combine = TRUE,  
+   palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2),"#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)),
+   color = "combined", #tsp_condition
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(size = 1 ,fill = "white",color = "black"),
+   title = "SSP PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("SSP PDT"),
+  trim = TRUE,
+order = c("HC Pre","HC Post","Post-Covid Pre","Post-Covid Post")
+  ) + rremove("legend")
+
+ssp_pdt_plot_final <- ggpar(ssp_pdt_plot, ylim = c(0,100))
+#cpm_pdt_plot_final
+add_summary(ssp_pdt_plot_final, "mean", color = "black",size = 0.5)
+```
+
+
+Create additional paired plot
+```{r}
+before_hc_ssp_pdt <- ssp_pdt_long %>% arrange(id) %>% dplyr::filter(gruppe == "HC", ssp_pdt_condition == "ssp_baseline_pdt") %>% pull(ssp_pdt_value)
+# subset weight data after treatment
+after_hc_ssp_pdt <- ssp_pdt_long %>% arrange(id)  %>% dplyr::filter(gruppe == "HC", ssp_pdt_condition == "qst_spatial_pdt") %>% pull(ssp_pdt_value)
+# Plot paired data
+pd_hc_ssp_pdt <- paired(before_hc_ssp_pdt, after_hc_ssp_pdt)
+hc_ssp_pdt_pp <- ggpaired(pd_hc_ssp_pdt, cond1 = "before_hc_ssp_pdt", cond2 = "after_hc_ssp_pdt",
+fill = "condition", palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2)))
+hc_ssp_pdt_pp <- ggpar(hc_ssp_pdt_pp, ylim = c(0,100))
+hc_ssp_pdt_pp
+```
+
+Create additional paired plot
+```{r}
+before_pc_ssp_pdt <- ssp_pdt_long %>% arrange(id) %>% dplyr::filter(gruppe == "Post-Covid", ssp_pdt_condition == "ssp_baseline_pdt") %>% pull(ssp_pdt_value)
+# subset weight data after treatment
+after_pc_ssp_pdt <- ssp_pdt_long %>% arrange(id)  %>% dplyr::filter(gruppe == "Post-Covid", ssp_pdt_condition == "qst_spatial_pdt") %>% pull(ssp_pdt_value)
+# Plot paired data
+pd_pc_ssp_pdt <- paired(before_pc_ssp_pdt, after_pc_ssp_pdt)
+pc_ssp_pdt_pp <-  ggpaired(pd_pc_ssp_pdt, cond1 = "before_pc_ssp_pdt", cond2 = "after_pc_ssp_pdt",
+fill = "condition", palette = c("#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)))
+pc_ssp_pdt_pp <- ggpar(pc_ssp_pdt_pp, ylim = c(0,100))
+pc_ssp_pdt_pp
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+ssp_pdt_long %>%
+  dplyr::group_by(gruppe, ssp_pdt_condition) %>%
+  rstatix::identify_outliers(ssp_pdt_value)
+
+
+ ssp_pdt_long %>%
+  group_by(gruppe, ssp_pdt_condition) %>%
+  shapiro_test(ssp_pdt_value)
+
+```
+--> One extreme outlier
+--> Post Covid data are not normal distributed
+
+
+Test for equal variances
+```{r}
+ssp_pdt_hc_variance <- if(ssp_pdt_long %>% filter(gruppe == "HC") %>%
+rstatix::levene_test(ssp_pdt_value ~ ssp_pdt_condition) %>% select(p) > 0.05){TRUE} else {FALSE}
+ssp_pdt_long %>% filter(gruppe == "HC") %>%
+rstatix::levene_test(ssp_pdt_value ~ ssp_pdt_condition)
+ssp_pdt_pc_variance <- if(ssp_pdt_long %>% filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(ssp_pdt_value ~ ssp_pdt_condition) %>% select(p) > 0.05){TRUE} else {FALSE}
+ssp_pdt_long %>% filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(ssp_pdt_value ~ ssp_pdt_condition)
+```
+
+
+Paired t-tets and wilcox test (for pc)
+```{r}
+ssp_pdt_long %>% dplyr::group_by(gruppe) %>%
+        rstatix::t_test(
+         ssp_pdt_value ~ ssp_pdt_condition, paired = TRUE,var.equal = TRUE, 
+         p.adjust.method = "none")
+
+
+ssp_pdt_long %>% filter(gruppe == "Post-Covid") %>%
+        rstatix::wilcox_test(
+         ssp_pdt_value ~ ssp_pdt_condition, paired = TRUE, 
+         p.adjust.method = "none")
+```
+--> Post-Covid significant (both t test and wilcox test are signficant)
+--> HC not significant
+
+Sensitivity analysis
+```{r}
+out_ssp_pdt_id <- ssp_pdt_long %>% dplyr::group_by(gruppe, ssp_pdt_condition) %>%
+                                   rstatix::identify_outliers(ssp_pdt_value) %>% 
+                                   filter(is.extreme == TRUE) %>% pull(id)
+
+ssp_pdt_long %>% filter(!id %in% out_ssp_pdt_id) %>% dplyr::group_by(gruppe) %>%
+        rstatix::t_test(
+         ssp_pdt_value ~ ssp_pdt_condition, paired = TRUE, 
+         p.adjust.method = "none")
+
+ssp_pdt_long  %>% filter(!id %in% out_ssp_pdt_id) %>% filter(gruppe == "Post-Covid") %>%
+        rstatix::wilcox_test(
+         ssp_pdt_value ~ ssp_pdt_condition, paired = TRUE, 
+         p.adjust.method = "none")
+
+```
+--> Sensitivity Analysis no diff: Post Covid still both test significant 
+
+Effect size and bootstrapped ci
+```{r}
+set.seed(777)
+ssp_pdt_long %>% arrange(id) %>% filter(gruppe == "Post-Covid") %>% rstatix::cohens_d(
+  ssp_pdt_value ~ ssp_pdt_condition,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = TRUE,
+ # mu = 0,
+  var.equal = ssp_pdt_pc_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+Effect size sensitivity analysis and bootstrapped ci
+```{r}
+set.seed(777)
+ssp_pdt_long %>% arrange(id) %>% filter(gruppe == "Post-Covid") %>% filter(!id %in% out_ssp_pdt_id) %>% rstatix::cohens_d(
+  ssp_pdt_value ~ ssp_pdt_condition,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = TRUE,
+ # mu = 0,
+  var.equal = ssp_pdt_pc_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+####################   SSP PDT Main Analysis
+
+Create boxplot
+```{r}
+ssp_pdt_main_plot <- ggviolin(all_data, x = "gruppe", y = "ssp_ratio_pdt",
+   fill = "gruppe",
+   palette = c("#00AFBB","#FC4E07"),
+   color = "gruppe",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black", size = 1),
+   title = "SSP PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("SSP PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Post-Covid")) + rremove("legend")
+
+ssp_pdt_main_plot_final <- ggpar(ssp_pdt_main_plot, ylim = c(0,2))
+#ptt_plot_final
+add_summary(ssp_pdt_main_plot_final, "mean", color = "black",size = 0.5)
+```
+
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::shapiro_test(ssp_ratio_pdt) 
+
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::identify_outliers(ssp_ratio_pdt) %>% select(id,gruppe,ssp_ratio_pdt,is.outlier,is.extreme) 
+```
+-> one extreme outlier
+-> data are not normal distributed
+
+Test for equal variances
+```{r}
+ssp_pdt_main_variance <- if(all_data %>%
+rstatix::levene_test(ssp_ratio_pdt ~ gruppe) %>% dplyr::select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(ssp_ratio_pdt ~ gruppe)
+```
+
+T-test and wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         ssp_ratio_pdt ~ gruppe, paired = FALSE, var.equal = ssp_pdt_main_variance,
+         p.adjust.method = "none", detailed = FALSE)
+
+all_data %>% rstatix::wilcox_test(
+         ssp_ratio_pdt ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+-> t-test annd wilcox test not significant
+
+
+Sensitivity analysis
+```{r}
+out_ssp_pdt_id2 <- all_data %>% dplyr::group_by(gruppe) %>% rstatix::identify_outliers(ssp_ratio_pdt) %>% 
+                                dplyr::filter(is.extreme == TRUE) %>% pull(id)
+
+all_data %>% dplyr::filter(!id %in% out_ssp_pdt_id2) %>% rstatix::t_test(
+         ssp_ratio_pdt ~ gruppe, paired = FALSE, var.equal =  ssp_pdt_main_variance,
+         p.adjust.method = "none", detailed = FALSE)
+
+   all_data %>% dplyr::filter(!id %in% out_ssp_pdt_id2) %>% rstatix::wilcox_test(
+         ssp_ratio_pdt ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+   
+```
+-> sensitivity analysis: no dif
+
+
+
+
+#####################  SSP PTT Pre Analysis
+
+Create long df
+```{r}
+ssp_ptt_long <- all_data %>% dplyr::select(id,gruppe,ssp_baseline_ptt,qst_spatial_ptt) %>% 
+                             tidyr::pivot_longer(cols = c("ssp_baseline_ptt","qst_spatial_ptt"), names_to =  
+                                                "ssp_ptt_condition", values_to = "ssp_ptt_value") %>% 
+                             dplyr::mutate(combined = paste0(gruppe,ssp_ptt_condition))
+
+table(ssp_ptt_long$combined)
+
+ssp_ptt_long$combined <- car::recode(ssp_ptt_long$combined,"'HCssp_baseline_ptt' = 'HC Pre';'HCqst_spatial_ptt' = 'HC Post';'Post-Covidssp_baseline_ptt' = 'Post-Covid Pre';'Post-Covidqst_spatial_ptt' = 'Post-Covid Post'")
+
+ssp_ptt_long <- ssp_ptt_long %>% dplyr::mutate(ssp_ptt_condition = as.factor(ssp_ptt_condition),
+                                 combined = as.factor(combined)) 
+```
+
+
+Plot paired results
+```{r}
+ssp_ptt_plot <- ggviolin(ssp_ptt_long, x = "combined", y = "ssp_ptt_value",
+   fill = "combined",
+   combine = TRUE,  
+   palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2),"#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)),
+   color = "combined", #tsp_condition
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(size = 1 ,fill = "white",color = "black"),
+   title = "SSP ptt values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("SSP ptt"),
+  trim = TRUE,
+order = c("HC Pre","HC Post","Post-Covid Pre","Post-Covid Post")
+  ) + rremove("legend")
+
+ssp_ptt_plot_final <- ggpar(ssp_ptt_plot, ylim = c(0,100))
+#cpm_ptt_plot_final
+add_summary(ssp_ptt_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Create additional paired plot
+```{r}
+before_hc_ssp_ptt <- ssp_ptt_long %>% arrange(id) %>% dplyr::filter(gruppe == "HC", ssp_ptt_condition == "ssp_baseline_ptt") %>% pull(ssp_ptt_value)
+# subset weight data after treatment
+after_hc_ssp_ptt <- ssp_ptt_long %>% arrange(id)  %>% dplyr::filter(gruppe == "HC", ssp_ptt_condition == "qst_spatial_ptt") %>% pull(ssp_ptt_value)
+# Plot paired data
+pd_hc_ssp_ptt <- paired(before_hc_ssp_ptt, after_hc_ssp_ptt)
+hc_ssp_ptt_pp <- ggpaired(pd_hc_ssp_ptt, cond1 = "before_hc_ssp_ptt", cond2 = "after_hc_ssp_ptt",
+fill = "condition", palette = c("#00AFBB",darken("#00AFBB",space = "HCL",amount = 0.2)))
+hc_ssp_ptt_pp <- ggpar(hc_ssp_ptt_pp, ylim = c(0,100))
+hc_ssp_ptt_pp
+```
+
+
+Create additional paired plot
+```{r}
+before_pc_ssp_ptt <- ssp_ptt_long %>% arrange(id) %>% dplyr::filter(gruppe == "Post-Covid", ssp_ptt_condition == "ssp_baseline_ptt") %>% pull(ssp_ptt_value)
+# subset weight data after treatment
+after_pc_ssp_ptt <- ssp_ptt_long %>% arrange(id)  %>% dplyr::filter(gruppe == "Post-Covid", ssp_ptt_condition == "qst_spatial_ptt") %>% pull(ssp_ptt_value)
+# Plot paired data
+pd_pc_ssp_ptt <- paired(before_pc_ssp_ptt, after_pc_ssp_ptt)
+pc_ssp_ptt_pp <- ggpaired(pd_pc_ssp_ptt, cond1 = "before_pc_ssp_ptt", cond2 = "after_pc_ssp_ptt",
+fill = "condition", palette = c("#FC4E07",darken("#FC4E07",space = "HCL",amount = 0.2)))
+
+pc_ssp_ptt_pp <- ggpar(pc_ssp_ptt_pp, ylim = c(0,100))
+pc_ssp_ptt_pp 
+```
+
+Search for extreme outlier and test for normal distiribution
+```{r}
+ssp_ptt_long %>%
+  dplyr::group_by(gruppe, ssp_ptt_condition) %>%
+  rstatix::identify_outliers(ssp_ptt_value)
+
+ssp_ptt_long %>%
+  dplyr::group_by(gruppe, ssp_ptt_condition) %>%
+  rstatix::shapiro_test(ssp_ptt_value)
+```
+
+--> no outlier
+--> data are not normal distributed
+
+Test for equal variances
+```{r}
+ssp_ptt_hc_variance <- if(ssp_ptt_long %>% filter(gruppe == "HC") %>%
+rstatix::levene_test(ssp_ptt_value ~ ssp_ptt_condition) %>% select(p) > 0.05){TRUE} else {FALSE}
+ssp_ptt_long %>% filter(gruppe == "HC") %>%
+rstatix::levene_test(ssp_ptt_value ~ ssp_ptt_condition)
+ssp_ptt_pc_variance <- if(ssp_ptt_long %>% filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(ssp_ptt_value ~ ssp_ptt_condition) %>% select(p) > 0.05){TRUE} else {FALSE}
+ssp_ptt_long %>% filter(gruppe == "Post-Covid") %>%
+rstatix::levene_test(ssp_ptt_value ~ ssp_ptt_condition)
+```
+
+
+T-test and Wilcox Test (paired)
+```{r}
+ssp_ptt_long %>% arrange(id) %>% dplyr::group_by(gruppe) %>%
+        rstatix::t_test(
+         ssp_ptt_value ~ ssp_ptt_condition, paired = TRUE, var.equal = TRUE,
+         p.adjust.method = "none")
+
+
+ssp_ptt_long %>% arrange(id) %>% dplyr::group_by(gruppe) %>%
+        rstatix::wilcox_test(
+         ssp_ptt_value ~ ssp_ptt_condition, paired = TRUE, 
+         p.adjust.method = "none")
+
+```
+
+--> t-test not sig for HC only for post covid 
+-->wilcox test:significant for both groups
+
+
+Effect size and bootstrapped ci
+```{r}
+set.seed(777)
+ssp_ptt_long %>% arrange(id) %>% group_by(gruppe) %>% rstatix::cohens_d(
+  ssp_ptt_value ~ ssp_ptt_condition,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = TRUE,
+ # mu = 0,
+  var.equal = ssp_ptt_pc_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+############   SSP PTT Main Analysis
+
+Create boxplot
+```{r}
+ssp_ptt_main_plot <- ggviolin(all_data, x = "gruppe", y = "ssp_ratio_ptt",
+   fill = "gruppe",
+   palette = c("#00AFBB","#FC4E07"),
+   color = "gruppe",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black", size = 1),
+   title = "SSP PTT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("SSP PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Post-Covid")) + rremove("legend")
+
+ssp_ptt_main_plot_final <- ggpar(ssp_ptt_main_plot, ylim = c(0,3))
+#ptt_plot_final
+add_summary(ssp_ptt_main_plot_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  group_by(gruppe) %>%
+  identify_outliers(ssp_ratio_ptt) %>% select(id,gruppe,ssp_ratio_ptt,is.outlier,is.extreme)
+
+all_data %>%
+  dplyr::group_by(gruppe) %>%
+  rstatix::shapiro_test(ssp_ratio_ptt)
+```
+--> 2 extreme outlier
+--> data are not normal distributed
+
+```{r}
+ssp_ptt_main_variance <- if(all_data %>%
+rstatix::levene_test(ssp_ratio_ptt ~ gruppe) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(ssp_ratio_ptt ~ gruppe)
+```
+
+T-test and Wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         ssp_ratio_ptt ~ gruppe, paired = FALSE, var.equal =  ssp_ptt_main_variance,
+         p.adjust.method = "none", detailed = FALSE)
+
+all_data %>% rstatix::wilcox_test(
+         ssp_ratio_ptt ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+--> t-test not significant
+--> wilcox test is significant!
+
+Sensitvivy analysis
+```{r}
+out_ssp_ptt_id2 <- all_data %>% group_by(gruppe) %>% identify_outliers(ssp_ratio_ptt) %>% 
+                                filter(is.extreme == TRUE) %>% pull(id)
+
+all_data %>% filter(!id %in% out_ssp_ptt_id2) %>% rstatix::t_test(
+         ssp_ratio_ptt ~ gruppe, paired = FALSE, var.equal =  ssp_ptt_main_variance,
+         p.adjust.method = "none", detailed = TRUE)
+
+all_data %>% filter(!id %in% out_ssp_ptt_id2) %>% rstatix::wilcox_test(
+         ssp_ratio_ptt ~ gruppe, paired = FALSE, 
+         p.adjust.method = "none", detailed = TRUE)
+   
+```
+--> sensitivity analysis: Both t-tets and wilcox test are significant
+
+Effect size and bootstrapped ci
+```{r}
+set.seed(777)
+all_data %>% rstatix::cohens_d(
+  ssp_ratio_ptt ~ gruppe,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = ssp_ptt_main_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+Sensitivity analysis Effect size and bootstrapped ci
+```{r}
+set.seed(777)
+all_data %>% filter(!id %in% out_ssp_ptt_id2) %>% rstatix::cohens_d(
+  ssp_ratio_ptt ~ gruppe,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = ssp_ptt_main_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+
+
+
+

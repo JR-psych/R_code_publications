@@ -1,0 +1,667 @@
+---
+title: "Ifatico Pain"
+author: "JR"
+date: "2024-07-29"
+output: html_document
+---
+
+load packages
+```{r message=FALSE, warning=FALSE}
+library(compareGroups)
+library(PairedData)
+library(readxl)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(Rmisc) 
+library(readxl)
+library(ggpubr) 
+library(rstatix) 
+library(WRS2)
+library(dplyr) 
+library(effectsize)
+library(dplyr)
+library(MOTE)
+library(colorspace)
+library(readr)
+```
+
+
+Load and prepare data
+
+Load Covid data
+```{r}
+data_covid_as <- read_excel("data_covid_assessment.xlsx")
+data_covid_as <- data_covid_as  %>% filter(!is.na(id)) %>%  
+                              select(-c("record_id","redcap_event_name","redcap_repeat_instrument",
+                                        "redcap_repeat_instance","redcap_survey_identifier",
+                                         "id_timestamp","id_complete")    
+) # no values
+data_covid_qu <- read_excel("data_covid_questionnaires.xlsx")
+data_covid_qu <- data_covid_qu %>% select(-(assessment_timestamp:ncol(data_covid_qu))) %>%  
+                              select(-c("A","redcap_event_name","redcap_repeat_instrument",
+                                    "redcap_repeat_instance","redcap_survey_identifier",
+                                     "id_timestamp","id_complete","demographie_timestamp"))                                     #No values
+covid_data <- merge(data_covid_as,data_covid_qu, by = "id", all = TRUE)
+covid_data <- covid_data %>% mutate(alkoholmenge1 = as.character(alkoholmenge1),
+                                    alkoholmenge3 = as.character(alkoholmenge3),
+                                    gruppe = "Post-Covid")
+```
+
+Load HC data
+```{r}
+data_hc <- read_excel("data_hc_assessment.xlsx")
+data_hc <- data_hc %>% select(-c(redcap_event_name,redcap_survey_identifier))
+
+demo_hc <- read_excel("data_hc_questionnaires.xlsx")
+demo_hc <- demo_hc %>% rename(id = record_id)
+demo_hc <- demo_hc %>% select(-c(redcap_event_name,redcap_survey_identifier,alter,geschlecht)) # "alter" and "geschlecht" are  wrong
+hc_data <- merge(data_hc,demo_hc, by = "id", all = TRUE)
+hc_data <- hc_data %>% select(-demographie_timestamp) %>% # causing problems while merging
+                       rename(geschlecht = anmeldung_geschlecht, 
+                              alter = age_subjects) %>% mutate(gruppe = "HC")
+hc_data$geschlecht <- car::recode(hc_data$geschlecht,"0 = 1; 1 = 0")
+```
+
+Load data for Pain Drawings
+```{r}
+data_draw_covid <-read_excel("paindrawings_covid.xlsx")
+data_draw_hc <- read_excel("paindrawings_hc.xlsx")
+colnames(data_draw_hc) <- gsub("_ges","",colnames(data_draw_hc))
+colnames(data_draw_covid) <- gsub("_base","",colnames(data_draw_covid))
+data_draw_combined <- merge(data_draw_covid,data_draw_hc, by = colnames(data_draw_hc),all = TRUE)
+```
+
+Combine HC and Covid Data
+```{r}
+all_data <- full_join(covid_data,hc_data,by = colnames(hc_data)[which(colnames(hc_data) %in% colnames(covid_data))])
+all_data <- full_join(all_data,data_draw_combined,by = "id")
+all_data$qst[is.na(all_data$qst)] <- 1 # replace the na value which was wrong
+all_data$geschlecht[is.na(all_data$geschlecht)] <- 1 #replace two na´s which were female 
+```
+
+
+Calculate QST specific outcome values
+```{r}
+all_data <- all_data %>% rename(pain = schmerzen_icc___5,
+                                kog = kognitiv_icc___9,
+                                schlaf = schlaf_icc___8,
+                                wahrnehmung = wahrnehmung_icc___9,
+                                immun = immunsys_icc___12,
+                                veg = vegetativ_icc___13) %>% 
+                          mutate(icc_crit1 = pain + kog + schlaf + wahrnehmung,
+                                 icc_crit2 = immun + veg) %>% 
+                          mutate(mecfs = ifelse(icc_crit1 <= 1 & icc_crit2 == 0 & icc == 1,"Cov_mecfs","Cov_no_mecfs"),
+                                 ssp_baseline_pdt = (qst_cuff_1_pdt + qst_cuff_2_pdt)/2,
+                                 ssp_baseline_ptt = (qst_cuff_1_ptt + qst_cuff_2_ptt)/2,
+                                 cpm_dif_pdt = qst_cpm_pdt - qst_cuff_1_pdt,
+                                 cpm_dif_ptt = qst_cpm_ptt - qst_cuff_1_ptt,
+                                 tsp2 = (qst_temporal_8 + qst_temporal_9 + qst_temporal_10)/3,
+                                 tsp1 = (qst_temporal_1 + qst_temporal_2 + qst_temporal_3)/3) %>%
+                          mutate(tsp = tsp2 - tsp1,
+                                 ssp_ratio_pdt = qst_spatial_pdt/ssp_baseline_pdt,
+                                 ssp_ratio_ptt = qst_spatial_ptt/ssp_baseline_ptt,
+                                 gruppe = as.factor(gruppe)) %>% 
+                    dplyr::mutate(cpm_pdt_effect = ifelse(cpm_dif_pdt < 0,"fascilatory",ifelse(cpm_dif_pdt == 0,"no effect",ifelse(cpm_dif_pdt > 0,"inhibitory","Didnt work"))),
+                                  cpm_ptt_effect = ifelse(cpm_dif_ptt < 0,"fascilatory",ifelse(cpm_dif_ptt == 0,"no effect",ifelse(cpm_dif_ptt > 0,"inhibitory","Didnt work"))))  
+```
+
+Calculate handgrip values
+```{r}
+all_data <- all_data %>% rowwise() %>% mutate(hand_grip_fmean = mean(c(hand_grip_1,hand_grip_2,hand_grip_3,hand_grip_4,hand_grip_5,hand_grip_6, hand_grip_7,hand_grip_8,hand_grip_9,hand_grip_10)))
+
+all_data <- all_data %>% rowwise() %>% mutate(hand_grip_fmax = max(c(hand_grip_1,hand_grip_2,hand_grip_3,hand_grip_4,hand_grip_5,hand_grip_6, hand_grip_7,hand_grip_8,hand_grip_9,hand_grip_10))) %>% mutate(hand_grip_ratio = hand_grip_fmax/ hand_grip_fmean)
+```
+
+Calculate outcome values for PEM Questionnaire
+```{r}
+all_data$pem1 <- ifelse(all_data$dsq_pem_freq_1 >= 2 & all_data$dsq_pem_sev_1 >= 2,1,0)
+all_data$pem2 <- ifelse(all_data$dsq_pem_freq_2 >= 2 & all_data$dsq_pem_sev_2 >= 2,1,0)
+all_data$pem3 <- ifelse(all_data$dsq_pem_freq_3 >= 2 & all_data$dsq_pem_sev_3 >= 2,1,0)
+all_data$pem4 <- ifelse(all_data$dsq_pem_freq_4 >= 2 & all_data$dsq_pem_sev_4 >= 2,1,0)
+all_data$pem5 <- ifelse(all_data$dsq_pem_freq_5 >= 2 & all_data$dsq_pem_sev_5 >= 2,1,0)
+
+all_data <- all_data %>% mutate(pem_combined = pem1 + pem2 + pem3 + pem4 + pem5) %>% 
+                          mutate(pem_level_1 = ifelse(pem_combined > 0,1,0),
+                                 pem_level_2 = dsq_pem_dur_1)
+
+```
+
+
+Calculate outcome values for Sf12 
+```{r}
+all_data <- all_data %>% mutate(rolph_2 = sf12_4,
+                                rolph_3 = sf12_5,
+                                rolem_2 = sf12_6,
+                                rolem_3 = sf12_7,
+                                pfi_2 = sf12_2,
+                                pfi_4 = sf12_3,
+                                ghp_1 = sf12_1,
+                                pain_2 = sf12_8,
+                                soc_2 = sf12_12,
+                                vital_2 = sf12_10,
+                                mhi_3 = sf12_9,
+                                mhi_4 = sf12_11) %>% 
+                        mutate(rpain_2 = 6 - pain_2,
+                               rghp_1 = 6 - ghp_1,
+                               rvital_2 = 7 - vital_2,
+                               rmhi_3 = 7 - mhi_3) %>%
+                        mutate(pf_02_1 = ifelse(pfi_2 == 1,1,0),
+                               pf_02_2 = ifelse(pfi_2 == 2,1,0),
+                              pf_04_1 = ifelse(pfi_4 == 1,1,0),
+                               pf_04_2 = ifelse(pfi_4 == 2,1,0),
+                               rp_02_1 = ifelse(rolph_2 == 1,1,0),
+                               rp_03_1 = ifelse(rolph_3 == 1,1,0),
+                               bp_02_1 = ifelse(rpain_2 == 1,1,0),
+                               bp_02_2 = ifelse(rpain_2 == 2,1,0),
+                               bp_02_3 = ifelse(rpain_2 == 3,1,0),
+                               bp_02_4 = ifelse(rpain_2 == 4,1,0),
+                               gh_01_1 = ifelse(rghp_1 == 1,1,0),
+                               gh_01_2 = ifelse(rghp_1 == 2,1,0),
+                               gh_01_3 = ifelse(rghp_1 == 3,1,0),
+                               gh_01_4 = ifelse(rghp_1 == 4,1,0),
+                               vt_02_1 = ifelse(rvital_2 == 1,1,0),
+                               vt_02_2 = ifelse(rvital_2 == 2,1,0),
+                               vt_02_3 = ifelse(rvital_2 == 3,1,0),
+                               vt_02_4 = ifelse(rvital_2 == 4,1,0),
+                               vt_02_5 = ifelse(rvital_2 == 5,1,0),
+                               sf_02_1 = ifelse(soc_2 == 1,1,0),
+                               sf_02_2 = ifelse(soc_2 == 2,1,0),
+                              sf_02_3 = ifelse(soc_2 == 3,1,0),
+                               sf_02_4 = ifelse(soc_2 == 4,1,0),
+                               re_02_1 = ifelse(rolem_2 == 1,1,0),
+                               re_03_1 = ifelse(rolem_3 == 1,1,0),
+                               mh_03_1 = ifelse(rmhi_3 == 1,1,0),
+                               mh_03_2 = ifelse(rmhi_3 == 2,1,0),
+                               mh_03_3 = ifelse(rmhi_3 == 3,1,0),
+                               mh_03_4 = ifelse(rmhi_3 == 4,1,0),
+                               mh_03_5 = ifelse(rmhi_3 == 5,1,0),
+                               mh_04_1 = ifelse(mhi_4 == 1,1,0),
+                               mh_04_2 = ifelse(mhi_4 == 2,1,0),
+                               mh_04_3 = ifelse(mhi_4 == 3,1,0),
+                               mh_04_4 = ifelse(mhi_4 == 4,1,0),
+                               mh_04_5 = ifelse(mhi_4 == 5,1,0)) %>%
+                           mutate(kroh12 = (-7.23216*pf_02_1) + (-3.45555*pf_02_2) + (-6.24397*pf_04_1) +     (-2.73557*pf_04_2) +
+                                          (-4.61617*rp_02_1) +  (-5.51747*rp_03_1) + (-11.25544*bp_02_1) + (-8.38063*bp_02_2) +
+                                           (-6.50522*bp_02_3) + (-3.80130*bp_02_4) + (-8.37399*gh_01_1) + (-5.56461*gh_01_2) + 
+                                           (-3.02396*gh_01_3) + (-1.31872*gh_01_4) + (-2.44706*vt_02_1) + (-2.02168*vt_02_2) + 
+                                           (-1.6185*vt_02_3) + (-1.14387*vt_02_4) + (-0.42251*vt_02_5) + (-0.33682*sf_02_1) +
+                                           (-0.94342*sf_02_2) + (-0.18043*sf_02_3) + (0.11038*sf_02_4) + (3.04365*re_02_1) + 
+                                           (2.32091*re_03_1) + (3.46638*mh_03_1) +  (2.90426*mh_03_2) + (2.37241*mh_03_3) + 
+                                           (1.36689*mh_03_4) + (0.66514*mh_03_5) + (4.61446*mh_04_1) + (3.41593*mh_04_2) +
+                                           (2.34247*mh_04_3) + (1.28044*mh_04_4) + (0.41188*mh_04_5),
+                                 proh12 = (3.93115*pf_02_1) + (1.8684*pf_02_2) + (2.68282*pf_04_1) + (1.43103*pf_04_2) + 
+                                          (1.4406*rp_02_1) +  (1.66968*rp_03_1) + (1.48619*bp_02_1) + (1.76691*bp_02_2) +
+                                          (1.49384*bp_02_3) + (0.90384*bp_02_4) + (-1.71175*gh_01_1) + (-0.16891*gh_01_2) +
+                                          (0.03482*gh_01_3) + (-0.06064*gh_01_4) + (-6.02409*vt_02_1) + (-4.88962*vt_02_2) +
+                                          (-3.29805*vt_02_3) + (-1.65178*vt_02_4) + (-0.92057*vt_02_5) + (-6.29724*sf_02_1) +
+                                          (-8.26066*sf_02_2) + (-5.63286*sf_02_3) + (-3.13896*sf_02_4) + (-6.82672*re_02_1) +
+                                          (-5.69921*re_03_1) + (-10.19085*mh_03_1) + (-7.92717*mh_03_2) + (-6.31121*mh_03_3) +
+                                          (-4.09842*mh_03_4) + (-1.94949*mh_03_5) + (-16.15395*mh_04_1) + (-10.77911*mh_04_2) +
+                                          (-8.09914*mh_04_3) + (-4.59055*mh_04_4) + (-1.95934*mh_04_5)) %>%
+                            mutate(ksk12 = (kroh12 + 56.57706),
+                                   psk12 = (proh12 + 60.75781)) 
+
+```
+
+
+Calculate outcome values for MPID, HADS, SSD, SS6,EVS,JSS
+```{r}
+all_data <- all_data %>% mutate(ssd_kog = ssd12_1 + ssd12_4 + ssd12_7 + ssd12_10,
+                                ssd_aff = ssd12_2 + ssd12_5 + ssd12_8 + ssd12_12,
+                                ssd_beh = ssd12_3 + ssd12_6 + ssd12_9 + ssd12_11) %>% mutate(
+                                ssd_total = ssd_kog + ssd_aff + ssd_beh  
+                                ) %>% 
+                         mutate(sss8_sum = sss8_1 + sss8_2 + sss8_3 + sss8_4 + sss8_5 + sss8_6 + sss8_7 + sss8_8,
+                                evs_total = evs_freq*evs_dur,
+                                jss_total = jss_1 + jss_2 + jss_3 +  jss_4)
+all_data$mpid_1_14[all_data$mpid_1_14 == -99] <- NA 
+
+all_data$mpid_mean <- rowMeans(all_data[,which(colnames(all_data) == "mpid_1_1"):which(colnames(all_data) == "mpid_1_22")], na.rm = TRUE)
+
+all_data <- all_data %>% mutate(hads_a = hads_1 + hads_3 + hads_5 + hads_9 + hads_11 + hads_13 + hads_7,
+                                hads_d = hads_8 + hads_10 + hads_2 + hads_4 + hads_6 + hads_12 + hads_14
+                                ) %>% mutate(hads_total = hads_a + hads_d)
+
+```
+
+Filter data with QST-measurement (qst == 1), and delete IDs IF002 and IF003 (which also had no QST-measurement but were wrongfully marked as qst == 1)
+```{r}
+all_data <- all_data %>% filter(qst == 1, 
+                                  id != "IF002",
+                                  id != "IF003")
+```
+
+Create Pain group based on ICC 5 
+```{r}
+all_data$pain[is.na(all_data$pain)] <- 2 # Only healthy controls had na values
+all_data$pain <- car::recode(all_data$pain," 1 = 'Cov_no_pain';0 = 'Cov_pain'; 2  = 'HC'")
+all_data$pain <- as.factor(all_data$pain)
+table(all_data$pain)
+```
+
+Create fatigue group and mecfs group based on fss and mecfs
+```{r}
+all_data <- all_data %>% mutate(f_group = ifelse(gruppe == "HC" | is.na(gruppe),"HC",ifelse(gruppe == "Post-Covid" & fss_total < 53 & fss_total > 36,"Moderate",ifelse(gruppe == "Post-Covid" & fss_total >= 53,"Severe","Error"))))
+hc_check <- all_data %>% filter(f_group == "HC") %>% select(id,gruppe,f_group)
+all_data$mecfs[is.na(all_data$mecfs)] <- "HC"
+all_data$mecfs <- as.factor(all_data$mecfs)
+all_data$f_group <- as.factor(all_data$f_group)
+table(all_data$f_group)
+table(all_data$mecfs)
+```
+
+How many in the fss group are also in the pain group?
+```{r}
+table(all_data %>% mutate(f_group_pain = paste(f_group,pain,sep = "-")) %>% pull(f_group_pain))
+```
+
+How many in the mecfs group are also in the pain group?
+```{r}
+table(all_data %>% mutate(mecfs_pain = paste(mecfs,pain,sep = "-")) %>% pull(mecfs_pain))
+```
+
+Prepare demographic data and combine paindrawings (front + back)
+```{r}
+all_data$geschlecht <- as.factor(all_data$geschlecht)
+all_data$familienstand <- ifelse(all_data$familienstand == 2,1,0)
+all_data$familienstand <- as.factor(all_data$familienstand)
+all_data$rauchen <- ifelse(all_data$rauchen == 1,1,0)
+all_data$rauchen <- as.factor(all_data$rauchen)
+all_data$bmi <- as.numeric(all_data$gewicht) / ((all_data$groesse/100)^2)
+all_data$beruf <- ifelse(all_data$beruf == 7,1,0)
+all_data$beruf <- as.factor(all_data$beruf)
+all_data <- all_data %>% mutate(pain_sum_fb = as.numeric(Allg_Front) + as.numeric(Allg_Back),
+                                pain_sum_fb_pc = as.numeric(PC_Front) + as.numeric(PC_Back),
+                                pain_sum_fb_main = as.numeric(Haupt_Front) + as.numeric(Haupt_Back))
+```
+
+Descriptives of Paindrawing data
+```{r}
+table(all_data$PC_Front)
+table(all_data$PC_Back)
+table(is.na(all_data %>% filter(gruppe != "HC") %>% pull(pain_sum_fb_pc)))
+mean(all_data$pain_sum_fb_pc, na.rm = TRUE)
+```
+
+
+Which statistics to use 
+```{r}
+statistics <- list(Mean = ~round(mean(.x, na.rm = TRUE),2), SD = ~round(sd(.x,na.rm = TRUE),2), Min = ~round(min(.x,na.rm = TRUE),2), Max = ~round(max(.x,na.rm = TRUE),2),
+                   Median = ~round(median(.x,na.rm = TRUE),2), NAN = ~sum(is.na(.x)))
+```
+
+Correct wrong values of evs
+```{r}
+all_data[which(all_data$id == "IFG_013"),"evs_total"] <- NA
+all_data[which(all_data$id == "IFG_012"),"evs_total"] <- 300
+all_data[which(all_data$id == "IFG_019"),"evs_total"] <- NA
+```
+
+Create table with demographic characteristics
+```{r}
+desc_demo <- all_data %>% group_by(gruppe) %>% select(
+                            #geschlecht,
+                            #familienstand,
+                            #rauchen,
+                            bmi,
+                            pain_sum_fb,
+                            pain_sum_fb_pc,
+                            pain_sum_fb_main,
+                            hand_grip_ratio,
+                            ssd_total, 
+                            sss8_sum,  
+                            evs_total, 
+                            jss_total, 
+                            hads_a,
+                            hads_d,
+                            hads_total,
+                            fss_total,
+                            ksk12,
+                            psk12, 
+                            mpid_mean) %>% summarise(across(everything(), statistics,
+                                                                .names = "{.col}.{.fn}")) %>% pivot_longer(
+                                                          cols = -gruppe,  
+                                                          names_to = c("Qst value", "Statistic"),  
+                                                          names_sep = "\\.", 
+                                                          values_to = "Value") %>% pivot_wider(
+                                                                                  names_from = Statistic,  
+                                                                                  values_from = Value)
+desc_demo    
+```
+
+
+
+```{r}
+table(all_data$post_cov_1___0)
+table(all_data$post_cov_1___1)
+table(all_data$post_cov_1___2)
+table(all_data$post_cov_1___3)
+table(all_data$post_cov_1___4)
+table(all_data$post_cov_1___5)
+table(all_data$post_cov_1___6)
+table(all_data$post_cov_1___7)
+table(all_data$post_cov_1___8)
+table(all_data$post_cov_1___9)
+table(all_data$post_cov_1___10)
+table(all_data$post_cov_1___11)
+table(all_data$post_cov_1___12)
+table(all_data$post_cov_1___13)
+table(all_data$post_cov_1___14)
+table(all_data$post_cov_1___15)
+table(all_data$post_cov_1___16)
+table(all_data$post_cov_1___17)
+table(all_data$post_cov_1___18)
+table(all_data$post_cov_1___19)
+table(all_data$post_cov_1___20)
+table(all_data$post_cov_1___21)
+table(all_data$post_cov_1___22)
+table(all_data$post_cov_1___23)
+table(all_data$post_cov_1___24)
+table(all_data$post_cov_1___25)
+table(all_data$post_cov_1___26)
+table(all_data$post_cov_1___27)
+table(all_data$post_cov_1___28)
+table(all_data$post_cov_1___29)
+table(all_data$post_cov_1___30)
+table(all_data$post_cov_1___31)
+```
+
+Create table on severity of PC-patients impairment according to the PCFS 
+and create table on how many PC-patients have had their symptoms for more than six months
+
+```{r}
+table(all_data$pcfs_1)
+table(all_data$post_cov_3)
+```
+
+Compare PC and HC regarding different variables
+```{r}
+q_table <- compareGroups::compareGroups(gruppe ~ alter + geschlecht + familienstand + rauchen + beruf + bmi + hand_grip_ratio + ssd_total + sss8_sum + evs_total + jss_total + hads_a + hads_d + hads_total + fss_total + ksk12 + psk12 + mpid_mean + pain_sum_fb + pain_sum_fb_pc +
+                            pain_sum_fb_main + pem_level_1, data = all_data,ref = 0)
+createTable(q_table)
+```
+
+
+
+## Pain questionnaires
+
+
+34 Persons did not get the questionnaire every other Person reported at least one type of pain.
+HC never got the questionnaire
+```{r}
+table(is.na(all_data %>% filter(gruppe == "Post-Covid") %>% pull(schmerz1_art_v2)))
+```
+
+Calculate specific outcome variables of pain questionnaire
+```{r}
+all_data <- all_data %>% mutate(schmerz_art_sum = as.numeric(!is.na(schmerz1_art_v2)) + as.numeric(!is.na(schmerz2_art_v2)) +  
+                                                  as.numeric(!is.na(schmerz3_art_v2)) + as.numeric(!is.na(schmerz4_art_v2)),
+                                schmerz_pc_sum =  sum(schmerz1_neu_v2,schmerz2_neu_v2,schmerz3_neu_v2,schmerz4_neu_v2,na.rm = TRUE)) %>% 
+                         mutate(percentage_pc = schmerz_pc_sum/schmerz_art_sum,
+                               pc_main_pain_in = ifelse(schmerz1_neu_v2 == 1,1,
+                                                 ifelse(schmerz2_neu_v2 == 1,2,
+                                                 ifelse(schmerz3_neu_v2 == 1,3,
+                                                 ifelse(schmerz4_neu_v2 == 1,4,NA)))),
+                               npc_main_pain_in = ifelse(schmerz1_neu_v2 == 0,1,
+                                                  ifelse(schmerz2_neu_v2 == 0,2,
+                                                  ifelse(schmerz3_neu_v2 == 0,3,
+                                                  ifelse(schmerz4_neu_v2 == 0,4,NA))))) %>% mutate(
+pc_main_intensity =  ifelse(pc_main_pain_in == 1,schmerz1_int_v2,
+                     ifelse(pc_main_pain_in == 2,schmerz2_int_v2,
+                     ifelse(pc_main_pain_in == 3,schmerz3_int_v2,
+                     ifelse(pc_main_pain_in == 4,schmerz4_int_v2,NA)))),
+pc_main_duration =   ifelse(pc_main_pain_in == 1,schmerz1_dauer_v2,
+                     ifelse(pc_main_pain_in == 2,schmerz2_dauer_v2,
+                     ifelse(pc_main_pain_in == 3,schmerz3_dauer_v2,
+                     ifelse(pc_main_pain_in == 4,schmerz4_dauer_v2,NA)))),
+pc_main_freq =       ifelse(pc_main_pain_in == 1,schmerz1_freq_v2,
+                     ifelse(pc_main_pain_in == 2,schmerz2_freq_v2,
+                     ifelse(pc_main_pain_in == 3,schmerz3_freq_v2,
+                     ifelse(pc_main_pain_in == 4,schmerz4_freq_v2,NA)))),
+npc_main_intensity = ifelse(npc_main_pain_in == 1,schmerz1_int_v2,
+                     ifelse(npc_main_pain_in == 2,schmerz2_int_v2,
+                     ifelse(npc_main_pain_in == 3,schmerz3_int_v2,
+                     ifelse(npc_main_pain_in == 4,schmerz4_int_v2,NA)))),
+npc_main_duration =  ifelse(npc_main_pain_in == 1,schmerz1_dauer_v2,
+                     ifelse(npc_main_pain_in == 2,schmerz2_dauer_v2,
+                     ifelse(npc_main_pain_in == 3,schmerz3_dauer_v2,
+                     ifelse(npc_main_pain_in == 4,schmerz4_dauer_v2,NA)))),
+npc_main_freq =      ifelse(npc_main_pain_in == 1,schmerz1_freq_v2,
+                     ifelse(npc_main_pain_in == 2,schmerz2_freq_v2,
+                     ifelse(npc_main_pain_in == 3,schmerz3_freq_v2,
+                     ifelse(npc_main_pain_in == 4,schmerz4_freq_v2,NA))))) %>% 
+  mutate(pc_pain1 = ifelse(schmerz1_neu_v2 == 1,schmerz1_art_v2,NA),
+         pc_pain2 = ifelse(schmerz2_neu_v2 == 1,schmerz2_art_v2,NA),
+         pc_pain3 = ifelse(schmerz3_neu_v2 == 1,schmerz3_art_v2,NA),
+         pc_pain4 = ifelse(schmerz4_neu_v2 == 1,schmerz4_art_v2,NA)) %>%
+  mutate(pc_head = ifelse(pc_pain1 == 0 | pc_pain2 == 0 | pc_pain3 == 0 | pc_pain4 == 0,1,0),
+         pc_muscle = ifelse(pc_pain1 == 1 | pc_pain2 == 1 | pc_pain3 == 1 | pc_pain4 == 1,1,0),
+         pc_other = ifelse(pc_pain1 == 2 | pc_pain2 == 2 | pc_pain3 == 2 | pc_pain4 == 2,1,0))
+                       
+```
+
+
+How many types ("schmerz_art") of pain on average?
+```{r}
+table(all_data %>% filter(schmerz_art_sum != 0) %>% filter(gruppe == "Post-Covid") %>% pull(schmerz_art_sum))
+mean(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(schmerz_art_sum))
+sd(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(schmerz_art_sum))
+```
+
+
+How many types of PC-pain on average?
+```{r}
+table(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(schmerz_pc_sum))
+mean(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(schmerz_pc_sum)) # Mittlere ANzahl von PC Schmerzen über alle die Schmerzen hatten
+sd(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(schmerz_pc_sum))
+```
+
+
+Percentage of PC-pain (and accordingly percentage of non PC-pain)
+```{r}
+mean(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(percentage_pc))
+sd(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(percentage_pc))
+```
+
+
+Distribution of PC-pain in PC-patients
+```{r}
+table(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(percentage_pc))
+```
+
+How many PC-patients had PC-main pain?
+```{r}
+table(all_data %>% filter(gruppe == "Post-Covid") %>% filter(schmerz_art_sum != 0) %>% pull(schmerz1_neu_v2))
+```
+
+Highest Intensity,duration,frequency for PC- and non-PC-pain?
+```{r}
+all_data %>% filter(schmerz_art_sum != 0) %>% group_by(gruppe)  %>% select(pc_main_intensity,pc_main_duration,pc_main_freq,npc_main_intensity,npc_main_duration,npc_main_freq) %>%  summarise(across(everything(), statistics, .names = "{.col}.{.fn}")) %>% pivot_longer(
+                                                          cols = -gruppe,  
+                                                          names_to = c("Pain", "Statistic"),  
+                                                          names_sep = "\\.", 
+                                                          values_to = "Value") %>% pivot_wider(
+                                                                                  names_from = Statistic,  
+                                                                                  values_from = Value)
+
+
+```
+
+
+How many PC-patients had at least one type of head pain/ muscle pain/ other pain?
+```{r}
+table(all_data$pc_head)
+table(all_data$pc_muscle)
+table(all_data$pc_other)
+```
+
+
+```{r}
+all_data <- ungroup(all_data) 
+```
+
+
+Correlatrion matrix of outcome parameters with QST-parameters (no correlation of pain duration with QST-parameters (---> not enough participants))
+```{r}
+cor.mat <- all_data %>% select(qst_cuff_1_pdt,qst_cuff_1_ptt,ssp_ratio_pdt,ssp_ratio_ptt,cpm_dif_pdt,cpm_dif_ptt,tsp,mpid_mean,fss_total,pain_sum_fb) %>% cor_mat(method = "pearson")
+cor.mat
+```
+
+
+```{r}
+cor.mat %>% cor_get_pval()
+```
+
+```{r}
+cor.mat %>%
+  cor_reorder() %>%
+  pull_lower_triangle() %>%
+  cor_plot(label = TRUE)
+```
+
+
+Define descriptive variables for clusters of PC-symptoms:
+
+Respiratory  1, 2
+Neurological: 8, 9, 10, 12,13, 22, 25, 26, 30, 31
+Inflammatory: 7, 18, 19, 23, 24
+Cardiovascular: 3, 4, 5
+Dermatological: 27, 28, 29
+Gastrointestinal: 14, 15, 16, 17
+Mental Health: 20, 21, 11
+
+```{r}
+all_data <- all_data %>% mutate(symptoms_res = ifelse(post_cov_1___1 == 1 | post_cov_1___2 == 1,1,0),
+                    symptoms_neu = ifelse(post_cov_1___8 == 1 | post_cov_1___9 == 1 | post_cov_1___10 == 1 | post_cov_1___12 == 1 | post_cov_1___13 == 1
+                                          | post_cov_1___22 == 1 | post_cov_1___25 == 1 | post_cov_1___26 == 1 | post_cov_1___30 == 1| post_cov_1___2 ==                         31,1,0),
+                    symptoms_inf = ifelse(post_cov_1___7 == 1 | post_cov_1___18 == 1| post_cov_1___19 == 1| post_cov_1___23 == 1| post_cov_1___24 == 
+                                            1,1,0),
+                    symptoms_car = ifelse(post_cov_1___3 == 1 | post_cov_1___4 == 1 | post_cov_1___5 == 1,1,0),
+                    symptoms_der = ifelse(post_cov_1___27 == 1 | post_cov_1___28 == 1 | post_cov_1___29 == 1,1,0),
+                    symptoms_gas = ifelse(post_cov_1___14 == 1 | post_cov_1___15 == 1 | post_cov_1___16 == 1 | post_cov_1___17 == 1,1,0),
+                    symptoms_mh = ifelse(post_cov_1___20 == 1 | post_cov_1___21 == 1 | post_cov_1___11 == 1,1,0)) 
+```
+
+Distribution of PC-symptoms according to clusters
+
+```{r}
+table(all_data$symptoms_res)
+table(all_data$symptoms_neu)
+table(all_data$symptoms_inf)
+table(all_data$symptoms_car)
+table(all_data$symptoms_der)
+table(all_data$symptoms_gas)
+table(all_data$symptoms_mh)
+```
+
+
+
+
+#####################  QST Descriptives ######################################################
+
+Descriptive differences in QST-parameters between HC and PC
+```{r}
+desc <- all_data %>% group_by(gruppe) %>% select(qst_cuff_1_pdt,
+                            qst_cuff_1_ptt,
+                            ssp_baseline_pdt,
+                            ssp_baseline_ptt,
+                            cpm_dif_pdt,
+                            cpm_dif_ptt,
+                            tsp2,
+                            tsp1,
+                            tsp,
+                            ssp_ratio_pdt,
+                            ssp_ratio_ptt) %>% summarise(across(everything(), statistics,
+                                                                .names = "{.col}.{.fn}")) %>% pivot_longer(
+                                                          cols = -gruppe,  
+                                                          names_to = c("Qst value", "Statistic"),  
+                                                          names_sep = "\\.", 
+                                                          values_to = "Value") %>% pivot_wider(
+                                                                                  names_from = Statistic,  
+                                                                                  values_from = Value)
+desc                                               
+```
+
+Descriptive differences in QST-parameters between HC, PC with moderate fatigue and PC with severe fatigue
+```{r}
+desc_f <- all_data %>% group_by(f_group) %>% select(qst_cuff_1_pdt,
+                            qst_cuff_1_ptt,
+                            ssp_baseline_pdt,
+                            ssp_baseline_ptt,
+                            cpm_dif_pdt,
+                            cpm_dif_ptt,
+                            tsp2,
+                            tsp1,
+                            tsp,
+                            ssp_ratio_pdt,
+                            ssp_ratio_ptt) %>% summarise(across(everything(), statistics,
+                                                                .names = "{.col}.{.fn}")) %>% pivot_longer(
+                                                          cols = -f_group,  
+                                                          names_to = c("Qst value", "Statistic"),  
+                                                          names_sep = "\\.", 
+                                                          values_to = "Value") %>% pivot_wider(
+                                                                                  names_from = Statistic,  
+                                                                                  values_from = Value)
+desc_f
+```
+
+Descriptive differences in QST-parameters between HC, PC with ME/CFS and PC without ME/CFS
+```{r}
+desc_mecfs <- all_data %>% group_by(mecfs) %>% select(qst_cuff_1_pdt,
+                            qst_cuff_1_ptt,
+                            ssp_baseline_pdt,
+                            ssp_baseline_ptt,
+                            cpm_dif_pdt,
+                            cpm_dif_ptt,
+                            tsp2,
+                            tsp1,
+                            tsp,
+                            ssp_ratio_pdt,
+                            ssp_ratio_ptt) %>% summarise(across(everything(), statistics,
+                                                                .names = "{.col}.{.fn}")) %>% pivot_longer(
+                                                          cols = -mecfs,  
+                                                          names_to = c("Qst value", "Statistic"),  
+                                                          names_sep = "\\.", 
+                                                          values_to = "Value") %>% pivot_wider(
+                                                                                  names_from = Statistic,  
+                                                                                  values_from = Value)
+desc_mecfs
+```
+
+Descriptive differences in QST-parameters between HC, PC with pain and PC without pain
+```{r}
+desc_pain <- all_data %>% group_by(pain) %>% select(qst_cuff_1_pdt,
+                            qst_cuff_1_ptt,
+                            ssp_baseline_pdt,
+                            ssp_baseline_ptt,
+                            cpm_dif_pdt,
+                            cpm_dif_ptt,
+                            tsp2,
+                            tsp1,
+                            tsp,
+                            ssp_ratio_pdt,
+                            ssp_ratio_ptt) %>% summarise(across(everything(), statistics,
+                                                                .names = "{.col}.{.fn}")) %>% pivot_longer(
+                                                          cols = -pain,  
+                                                          names_to = c("Qst value", "Statistic"),  
+                                                          names_sep = "\\.", 
+                                                          values_to = "Value") %>% pivot_wider(
+                                                                                  names_from = Statistic,  
+                                                                                  values_from = Value)
+desc_pain
+```
+
+
+```{r}
+#saveRDS(all_data, file = "all_data.rds")
+```
+
+
+
+
+
+
+
+
+

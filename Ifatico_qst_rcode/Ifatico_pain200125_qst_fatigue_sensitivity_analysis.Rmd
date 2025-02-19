@@ -1,0 +1,729 @@
+---
+title: "Ifatico Pain"
+author: "JR"
+date: "2024-07-29"
+output: html_document
+---
+
+load packages
+```{r message=FALSE, warning=FALSE}
+library(compareGroups)
+library(PairedData)
+library(readxl)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(Rmisc) 
+library(readxl)
+library(ggpubr) 
+library(rstatix) 
+library(WRS2)
+library(dplyr) 
+library(effectsize)
+library(dplyr)
+library(MOTE)
+library(colorspace)
+library(readr)
+```
+
+
+Load data
+```{r}
+all_data <- readRDS(file = "all_data.rds")
+```
+
+Varianzanalyse FATIGUE und MECFS
+```{r}
+table(all_data$f_group)
+```
+
+
+########################################### PDT
+
+Create plot
+```{r}
+bp_fatigue_pdt <- ggviolin(all_data, x = "f_group", y = "qst_cuff_1_pdt",
+   fill = "f_group",
+   palette = c("#00AFBB","deeppink","purple"),
+   color = "f_group",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "PDT values for MECFS moderate/ severe and healhy controls",
+  xlab = c("Group"),
+  ylab = c("PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Moderate","Severe")) + rremove("legend")
+
+bp_fatigue_pdt_final <- ggpar(bp_fatigue_pdt, ylim = c(0,100))
+#pdt_plot_final
+add_summary(bp_fatigue_pdt_final, "mean", color = "black",size = 0.5)
+```
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(f_group) %>%
+  rstatix::shapiro_test(qst_cuff_1_pdt)
+all_data %>%
+  group_by(f_group) %>%
+  identify_outliers(qst_cuff_1_pdt) %>% select(id,f_group,qst_cuff_1_pdt,is.outlier,is.extreme)
+
+```
+--> no extreme outlier
+--> Severe data not normal distributed
+
+Test for equal variances
+```{r}
+aov_fatigue_pdt_var <- if(all_data %>% 
+rstatix::levene_test(qst_cuff_1_pdt ~ f_group) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>% 
+rstatix::levene_test(qst_cuff_1_pdt ~ f_group)
+```
+Equal variances
+
+Anova and Kruskal test
+```{r}
+aov_fatigue_pdt <- anova_test(qst_cuff_1_pdt ~ f_group, data = all_data, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_pdt, correction = "auto")
+rstatix::kruskal_test(qst_cuff_1_pdt ~ f_group, data = all_data)
+```
+--> both significant 
+
+
+
+T-test and Wilcox test
+```{r}
+all_data  %>% rstatix::t_test(
+         qst_cuff_1_pdt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = aov_fatigue_pdt_var)
+all_data  %>% rstatix::wilcox_test(
+         qst_cuff_1_pdt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+Different results:
+Wilcox Test:
+HC vs Severe significant
+
+T test:
+--> 	HC vs. Moderate significant
+--> 	HC vs. Severe significant
+
+
+Get effectsize and bootrstrapped ci
+```{r}
+set.seed(777)
+all_data   %>% rstatix::cohens_d(
+  qst_cuff_1_pdt ~ f_group,
+  comparisons = NULL,
+  ref.group = "HC",
+  paired = FALSE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+
+
+###########################   PTT
+
+Create plot
+```{r}
+bp_fatigue_ptt <- ggviolin(all_data, x = "f_group", y = "qst_cuff_1_ptt",
+   fill = "f_group",
+   palette = c("#00AFBB","deeppink","purple"),
+   color = "f_group",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "PTT values for MECFS moderate/ severe and healhy controls",
+  xlab = c("Group"),
+  ylab = c("PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Moderate","Severe")) + rremove("legend")
+
+bp_fatigue_ptt_final <- ggpar(bp_fatigue_ptt, ylim = c(0,100))
+#ptt_plot_final
+add_summary(bp_fatigue_ptt_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(f_group) %>%
+  rstatix::shapiro_test(qst_cuff_1_ptt)
+
+all_data %>%
+  group_by(f_group) %>%
+  identify_outliers(qst_cuff_1_ptt)
+```
+--> Hc and severe not normal distributed
+--> no outlier
+
+
+Test for equal variances
+```{r}
+aov_fatigue_ptt_var <-  if(all_data %>%
+rstatix::levene_test(qst_cuff_1_ptt ~ f_group) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(qst_cuff_1_ptt ~ f_group)
+```
+--> var are equal
+
+
+
+```{r}
+aov_fatigue_ptt <- anova_test(qst_cuff_1_ptt ~ f_group, data = all_data, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_ptt, correction = "auto")
+rstatix::kruskal_test(qst_cuff_1_ptt ~ f_group, data = all_data)
+```
+--> Both anova and kurskal test are significant
+
+T-test and Wilcox test
+```{r}
+all_data  %>% rstatix::t_test(
+         qst_cuff_1_ptt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", var.equal = aov_fatigue_ptt_var)
+all_data  %>% rstatix::wilcox_test(
+         qst_cuff_1_ptt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none")
+```
+
+--> Moderate and Severe and sig. different to HC
+--> No sig diff between HC Moderate and severe (both tests)  
+
+Get effect size and bootstrapped ci
+```{r}
+set.seed(777)
+all_data   %>% rstatix::cohens_d(
+  qst_cuff_1_ptt ~ f_group,
+  comparisons = NULL,
+  ref.group = "HC",
+  paired = FALSE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+################ SSP PDT ################
+
+Create Plot
+```{r}
+bp_fatigue_ssp_pdt <- ggviolin(all_data, x = "f_group", y = "ssp_ratio_pdt",
+   fill = "f_group",
+   palette = c("#00AFBB","deeppink","purple"),
+   color = "f_group",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "SSP PDT values for MECFS moderate/ severe and healhy controls",
+  xlab = c("Group"),
+  ylab = c("SSP PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Moderate","Severe")) + rremove("legend")
+
+bp_fatigue_ssp_pdt_final <- ggpar(bp_fatigue_ssp_pdt, ylim = c(0,3))
+#pdt_plot_final
+add_summary(bp_fatigue_ssp_pdt_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(f_group) %>%
+  rstatix::shapiro_test(ssp_ratio_pdt)
+
+all_data %>%
+  group_by(f_group) %>%
+  identify_outliers(ssp_ratio_pdt) %>% select(id,f_group,ssp_ratio_pdt,is.outlier,is.extreme)
+```
+--> Hc and Moderate data are not normal distributed
+-->Two extreme outlier
+
+
+test for equal variances
+```{r}
+all_data %>%
+rstatix::levene_test(ssp_ratio_pdt ~ f_group)
+```
+--> var are equal
+
+Anova and kurskal test
+```{r}
+aov_fatigue_ssp_pdt <- anova_test(ssp_ratio_pdt ~ f_group, data = all_data, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_ssp_pdt, correction = "auto")
+rstatix::kruskal_test(ssp_ratio_pdt ~ f_group, data = all_data)
+```
+--> kruskal test and anova both not significant
+
+Sensitivity analyis
+```{r}
+fatigue_ssp_pdt_out_id <- all_data %>% group_by(f_group) %>% identify_outliers(ssp_ratio_pdt) %>% 
+                                       filter(is.extreme == TRUE) %>% pull(id)
+  
+aov_fatigue_ssp_pdt_out <- all_data %>% filter(!id %in% fatigue_ssp_pdt_out_id) %>% anova_test(ssp_ratio_pdt ~ f_group, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_ssp_pdt_out, correction = "auto")
+all_data %>% filter(!id %in% fatigue_ssp_pdt_out_id) %>% rstatix::kruskal_test(ssp_ratio_pdt ~ f_group)
+```
+Sensitivity analysis: No diff. Still both test not significant
+
+
+
+###############################   SSP PTT
+
+Create Plot
+```{r}
+bp_fatigue_ssp_ptt <- ggviolin(all_data, x = "f_group", y = "ssp_ratio_ptt",
+   fill = "f_group",
+   palette = c("#00AFBB","deeppink","purple"),
+   color = "f_group",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "SSP PTT values for MECFS moderate/ severe and healhy controls",
+  xlab = c("Group"),
+  ylab = c("SSP PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Moderate","Severe")) + rremove("legend")
+
+bp_fatigue_ssp_ptt_final <- ggpar(bp_fatigue_ssp_ptt, ylim = c(0,3))
+#ptt_plot_final
+add_summary(bp_fatigue_ssp_ptt_final, "mean", color = "black",size = 0.5)
+```
+
+
+Search for extreme outlier and test for normal distribution
+```{r}
+ all_data %>%
+  dplyr::group_by(f_group) %>%
+  rstatix::shapiro_test(ssp_ratio_ptt)
+
+all_data %>%
+  group_by(f_group) %>%
+  identify_outliers(ssp_ratio_ptt) %>% select(id,f_group,ssp_ratio_ptt,is.outlier,is.extreme)
+```
+--> only severe data normal distributed
+--> 2 extreme outlier
+
+```{r}
+aov_fatigue_ssp_ptt_var <- if(all_data %>%
+rstatix::levene_test(ssp_ratio_ptt ~ f_group) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(ssp_ratio_ptt ~ f_group)
+```
+--> var are equal
+
+
+Anova and kurskal test
+```{r}
+aov_fatigue_ssp_ptt <- anova_test(ssp_ratio_ptt ~ f_group, data = all_data, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_ssp_ptt, correction = "auto")
+rstatix::kruskal_test(ssp_ratio_ptt ~ f_group, data = all_data)
+```
+Anova is not sig but Kruskal-Wallis test is
+
+T-test and wilcox test
+```{r}
+all_data  %>% rstatix::t_test(
+         ssp_ratio_ptt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", var.equal = aov_fatigue_ssp_ptt_var)
+all_data  %>% rstatix::wilcox_test(
+         ssp_ratio_ptt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+
+--> wilcox test: sig dif between HC and Severe
+--> t test: sig diff between Moderate and severe
+
+
+Sensitivity analysis
+```{r}
+fatigue_ssp_ptt_out_id <- all_data %>% group_by(f_group) %>% identify_outliers(ssp_ratio_ptt) %>%
+                                       filter(is.extreme == TRUE) %>% pull(id)
+  
+  
+aov_fatigue_ssp_ptt_out <- all_data %>% filter(!id %in% fatigue_ssp_ptt_out_id) %>% anova_test(ssp_ratio_ptt ~ f_group, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_ssp_ptt_out, correction = "auto")
+all_data %>% filter(!id %in% fatigue_ssp_ptt_out_id) %>% rstatix::kruskal_test(ssp_ratio_ptt ~ f_group)
+```
+--> sensitivity analysis: now both are sig.
+
+T-test and wilcox test (sensitivity analysis)
+```{r}
+all_data %>% filter(!id %in% fatigue_ssp_ptt_out_id) %>% rstatix::t_test(
+         ssp_ratio_ptt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = aov_fatigue_ssp_ptt_var)
+all_data %>% filter(!id %in% fatigue_ssp_ptt_out_id) %>% rstatix::wilcox_test(
+         ssp_ratio_ptt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+
+Sensitivity analyis: t test and wilcox test: Hc vs severe sig. differences
+
+Get effect size and bootstrapped ci 
+```{r}
+set.seed(777)
+all_data   %>% rstatix::cohens_d(
+  ssp_ratio_ptt ~ f_group,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+Get effect size and bootstrapped ci (sensitivity analysis)
+```{r}
+set.seed(777)
+all_data %>% filter(!id %in% fatigue_ssp_ptt_out_id)  %>% rstatix::cohens_d(
+  ssp_ratio_ptt ~ f_group,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+
+########################  CPM PDT 
+
+Create plot
+```{r}
+bp_fatigue_cpm_pdt <- ggviolin(all_data, x = "f_group", y = "cpm_dif_pdt",
+   fill = "f_group",
+   palette = c("#00AFBB","deeppink","purple"),
+   color = "f_group",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = " CPM PDT values for MECFS moderate/ severe and healhy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Moderate","Severe")) + rremove("legend")
+
+bp_fatigue_cpm_pdt_final <- ggpar(bp_fatigue_cpm_pdt, ylim = c(-25,50))
+#pdt_plot_final
+add_summary(bp_fatigue_cpm_pdt_final, "mean", color = "black",size = 0.5)
+```
+
+Serach for extreme outlier and test for normal distribution
+```{r}
+ all_data %>%
+  dplyr::group_by(f_group) %>%
+  rstatix::shapiro_test(cpm_dif_pdt)
+
+all_data %>%
+  group_by(f_group) %>%
+  identify_outliers(cpm_dif_pdt) %>% select(id,f_group,cpm_dif_pdt,is.outlier,is.extreme)
+
+
+```
+--> severe data are not normal distributed
+--> no extreme outlier
+
+
+Test for equal variances
+```{r}
+aov_fatigue_cpm_pdt_var <- if(all_data %>%
+rstatix::levene_test(cpm_dif_pdt ~ f_group) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(cpm_dif_pdt ~ f_group)
+```
+--> var are equal
+
+Anova and Kurskal Test
+```{r}
+aov_fatigue_cpm_pdt <- anova_test(cpm_dif_pdt ~ f_group, data = all_data, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_cpm_pdt, correction = "auto")
+rstatix::kruskal_test(cpm_dif_pdt ~ f_group, data = all_data)
+```
+
+-->	Kruskal-Wallis is sig but anova is not
+
+
+
+T-test and wilcox test
+```{r}
+all_data  %>% rstatix::t_test(
+         cpm_dif_pdt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = aov_fatigue_cpm_pdt_var)
+all_data  %>% rstatix::wilcox_test(
+         cpm_dif_pdt ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+
+--> t-test and wilcox test: sig for 	HC vs	Moderate
+
+
+```{r}
+set.seed(777)
+all_data   %>% rstatix::cohens_d(
+  cpm_dif_pdt ~ f_group,
+  comparisons = NULL,
+  ref.group = "HC",
+  paired = FALSE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+
+
+
+
+##########################   CPM PTT
+
+Create for plot 
+```{r}
+bp_fatigue_cpm_ptt <- ggviolin(all_data, x = "f_group", y = "cpm_dif_ptt",
+   fill = "f_group",
+   palette = c("#00AFBB","deeppink","purple"),
+   color = "f_group",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = " CPM PTT values for MECFS moderate/ severe and healhy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Moderate","Severe")) + rremove("legend")
+
+bp_fatigue_cpm_ptt_final <- ggpar(bp_fatigue_cpm_ptt, ylim = c(-25,50))
+#ptt_plot_final
+add_summary(bp_fatigue_cpm_ptt_final, "mean", color = "black",size = 0.5)
+```
+
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(f_group) %>%
+  rstatix::shapiro_test(cpm_dif_ptt)
+
+all_data %>%
+  group_by(f_group) %>%
+  identify_outliers(cpm_dif_ptt) %>% select(id,f_group,cpm_dif_pdt,is.outlier,is.extreme)
+```
+--> HC data not normal distributed
+--> no extreme outlier
+
+Test for equal variances
+```{r}
+all_data %>%
+rstatix::levene_test(cpm_dif_ptt ~ f_group)
+```
+--> var are equal
+
+Anova and kurskal test
+```{r}
+aov_fatigue_cpm_ptt <- anova_test(cpm_dif_ptt ~ f_group, data = all_data, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_cpm_ptt, correction = "auto")
+rstatix::kruskal_test(cpm_dif_ptt ~ f_group, data = all_data)
+```
+
+Both not significant
+
+
+
+######################   TSP 
+
+Create long_df to plot line graph
+```{r}
+tsp_line_long <- all_data %>% select(id,gruppe,pain,f_group,mecfs,qst_temporal_1:qst_temporal_10) %>% pivot_longer(cols = qst_temporal_1:qst_temporal_10,names_to = "timepoint",values_to = "VAS.Rating") %>% mutate(timepoint = sub("qst_temporal_","",timepoint))
+```
+
+
+
+Create line plot
+```{r}
+tsp_line_plot3 <- ggline(tsp_line_long, x = "timepoint", y = "VAS.Rating", color = "f_group",
+ add = "mean_se", palette = c("#00AFBB","deeppink","purple")) 
+
+tsp_line_plot3 <- ggpar(tsp_line_plot3, ylim = c(0,10))
+tsp_line_plot3
+```
+
+
+Create plot
+```{r}
+bp_tsp_fatigue <- ggviolin(all_data, x = "f_group", y = "tsp",
+   fill = "f_group",
+   palette = c("#00AFBB","deeppink","purple"),
+   color = "f_group",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "TSP values for MECFS moderate/ severe and healhy controls",
+  xlab = c("Group"),
+  ylab = c("TSP"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Moderate","Severe")) + rremove("legend")
+
+bp_tsp_fatigue_final <- ggpar(bp_tsp_fatigue, ylim = c(-10,10))
+#pdt_plot_final
+add_summary(bp_tsp_fatigue_final, "mean", color = "black",size = 0.5)
+```
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(f_group) %>%
+  rstatix::shapiro_test(tsp)
+
+all_data %>%
+  group_by(f_group) %>%
+  identify_outliers(tsp) %>% select(id,f_group,tsp,is.outlier,is.extreme)
+
+```
+--> Severe data not normal distributed
+--> One extreme outlier
+
+Test for equal variances
+```{r}
+aov_fatigue_tsp_var <- if(all_data %>%
+rstatix::levene_test(tsp ~ f_group) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(tsp ~ f_group)
+```
+--> var are equal
+
+Anova and Kruskal test
+```{r}
+aov_fatigue_tsp <- anova_test(tsp ~ f_group, data = all_data, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_tsp, correction = "auto")
+rstatix::kruskal_test(tsp ~ f_group, data = all_data)
+```
+--> anova is significant but kruskal  is not 
+
+Sensitivity analysis
+```{r}
+fatigue_tsp_out_id <- all_data %>% group_by(f_group) %>% identify_outliers(tsp) %>% 
+                                   filter(is.extreme == TRUE) %>% pull(id)
+aov_fatigue_tsp_out <- all_data  %>% filter(!id %in% fatigue_tsp_out_id) %>%
+anova_test(tsp ~ f_group, detailed = TRUE)
+rstatix::get_anova_table(aov_fatigue_tsp_out, correction = "auto")
+all_data %>% filter(!id %in% fatigue_tsp_out_id) %>%rstatix::kruskal_test(tsp ~ f_group)
+```
+No dif.: ANova is sig but Kruskal  is not sig
+
+T-test and wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         tsp ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = aov_fatigue_tsp_var)
+all_data %>% rstatix::wilcox_test(
+         tsp ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+ t test: sig results for HC	vs Moderate
+ wilcox test: no sig results
+
+
+T-test and wilcox test (sensitivity analysis)
+```{r}
+all_data %>% filter(!id %in% fatigue_tsp_out_id) %>% rstatix::t_test(
+         tsp ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = aov_fatigue_tsp_var)
+all_data %>% filter(!id %in% fatigue_tsp_out_id) %>% rstatix::wilcox_test(
+         tsp ~ f_group, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+ t test: sig results for HC	vs Moderate
+ wilcox test: no sig results
+
+Sensitivity analysis: no differences
+
+Get effect size and bootstrapped ci 
+```{r}
+set.seed(777)
+all_data %>% filter(f_group != "Severe") %>% mutate(f_group = droplevels(f_group)) %>% rstatix::cohens_d(
+  tsp ~ f_group,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+Get effect size and bootstrapped ci (sensitivity analysis)
+```{r}
+set.seed(777)
+all_data %>% filter(!id %in% fatigue_tsp_out_id) %>% filter(f_group != "Severe") %>% mutate(f_group = droplevels(f_group))  %>% rstatix::cohens_d(
+  tsp ~ f_group,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = TRUE,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

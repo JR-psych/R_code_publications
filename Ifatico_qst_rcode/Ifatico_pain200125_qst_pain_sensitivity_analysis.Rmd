@@ -1,0 +1,665 @@
+---
+title: "Ifatico Pain"
+author: "JR"
+date: "2024-07-29"
+output: html_document
+---
+
+load packages
+```{r message=FALSE, warning=FALSE}
+library(compareGroups)
+library(PairedData)
+library(readxl)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+library(Rmisc) 
+library(readxl)
+library(ggpubr) 
+library(rstatix) 
+library(WRS2)
+library(dplyr) 
+library(effectsize)
+library(dplyr)
+library(MOTE)
+library(colorspace)
+library(readr)
+```
+
+
+Load data
+```{r}
+all_data <- readRDS(file = "all_data.rds")
+```
+
+```{r}
+table(all_data$pain)
+```
+############  PDT
+
+Create plot
+```{r}
+bp_sub_pdt <- ggviolin(all_data, x = "pain", y = "qst_cuff_1_pdt",
+   fill = "pain",
+   palette = c("#00AFBB","#FC4E07","red"),
+   color = "pain",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Cov_no_pain","Cov_pain")) + rremove("legend")
+
+bp_sub_pdt_final <- ggpar(bp_sub_pdt, ylim = c(0,100))
+#pdt_plot_final
+add_summary(bp_sub_pdt_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme ourlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(pain) %>%
+  rstatix::shapiro_test(qst_cuff_1_pdt)
+all_data %>%
+  group_by(pain) %>%
+  identify_outliers(qst_cuff_1_pdt) %>% dplyr::select(id,pain,qst_cuff_1_pdt,is.outlier,is.extreme)
+
+```
+--> Cov_pain not normal distributed
+--> No extreme outlier
+
+Test for equal variances
+```{r}
+sub_pdt_variance <- if(all_data %>% 
+rstatix::levene_test(qst_cuff_1_pdt ~ pain) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>% 
+rstatix::levene_test(qst_cuff_1_pdt ~ pain)
+```
+
+T-test and wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         qst_cuff_1_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_pdt_variance)
+all_data %>% rstatix::wilcox_test(
+         qst_cuff_1_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+--> only HC vs Cov_pain significant (t-test and wilcox-test)
+
+get effect size and bootstrapped ci
+```{r}
+set.seed(777)
+all_data %>% dplyr::filter(pain != "Cov_no_pain") %>% mutate(pain = droplevels(pain)) %>%rstatix::cohens_d(
+  qst_cuff_1_pdt ~ pain,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = sub_pdt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+##############################  PTT
+
+Create plot
+```{r}
+bp_sub_ptt <- ggviolin(all_data, x = "pain", y = "qst_cuff_1_ptt",
+   fill = "pain",
+   palette = c("#00AFBB","#FC4E07","red"),
+   color = "pain",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "PTT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Cov_no_pain","Cov_pain")) + rremove("legend")
+
+bp_sub_ptt_final <- ggpar(bp_sub_ptt, ylim = c(0,100))
+#ptt_plot_final
+add_summary(bp_sub_ptt_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme otliers and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(pain) %>%
+  rstatix::shapiro_test(qst_cuff_1_ptt)
+
+all_data %>%
+  group_by(pain) %>%
+  identify_outliers(qst_cuff_1_ptt) %>% select(id,pain,qst_cuff_1_ptt,is.outlier,is.extreme)
+```
+--> Cov_pain and HC data are not normal distributed
+--> no extreme outlier
+
+Test for equal variances
+```{r}
+sub_ptt_variance <- if(all_data  %>%
+rstatix::levene_test(qst_cuff_1_ptt ~ pain) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data  %>%
+rstatix::levene_test(qst_cuff_1_ptt ~ pain)
+```
+
+
+T-test and wilcox test
+```{r}
+all_data  %>% rstatix::t_test(
+         qst_cuff_1_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_ptt_variance)
+all_data  %>% rstatix::wilcox_test(
+         qst_cuff_1_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+Only cov_pain vs HC significant (for both Wilcox and t-test)
+
+Get effect size and bootstrapped ci
+```{r}
+set.seed(777)
+all_data %>% filter(pain != "Cov_no_pain") %>% mutate(pain = droplevels(pain)) %>% rstatix::cohens_d(
+  qst_cuff_1_ptt ~ pain,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = sub_ptt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+############################################TSP
+
+Create long df to plot
+```{r}
+tsp_line_long <- all_data %>% select(id,gruppe,pain,f_group,mecfs,qst_temporal_1:qst_temporal_10) %>% pivot_longer(cols = qst_temporal_1:qst_temporal_10,names_to = "timepoint",values_to = "VAS.Rating") %>% mutate(timepoint = sub("qst_temporal_","",timepoint))
+```
+
+Create line plot
+```{r}
+tsp_line_plot2 <- ggline(tsp_line_long, x = "timepoint", y = "VAS.Rating", color = "pain",
+ add = "mean_se", palette = c("#FC4E07","red","#00AFBB")) 
+
+tsp_line_plot2 <- ggpar(tsp_line_plot2, ylim = c(0,10))
+tsp_line_plot2
+```
+
+Create boxplot
+```{r}
+bp_tsp_sub <- ggviolin(all_data, x = "pain", y = "tsp",
+   fill = "pain",
+   palette = c("#00AFBB","#FC4E07","red"),
+   color = "pain",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "TSP Dif values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("TSP"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Cov_no_pain","Cov_pain")) + rremove("legend")
+
+bp_tsp_sub_final <- ggpar(bp_tsp_sub, ylim = c(-10,10))
+#pdt_plot_final
+add_summary(bp_tsp_sub_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(pain) %>%
+  rstatix::shapiro_test(tsp)
+
+all_data %>%
+  group_by(pain) %>%
+  identify_outliers(tsp) %>% select(id,pain,tsp,is.outlier,is.extreme)
+```
+--> All covid data not normal distributed
+--> 2 extreme outlier
+
+Test for equal variances
+```{r}
+sub_tsp_variance <- if(all_data  %>%
+rstatix::levene_test(tsp ~ pain) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data  %>%
+rstatix::levene_test(tsp ~ pain)
+```
+
+
+
+T-test and wilcox test
+```{r}
+all_data %>%  rstatix::t_test(
+         tsp ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_tsp_variance)
+all_data %>% rstatix::wilcox_test(
+         tsp ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+
+Cov Pain sig difference to HC for t-test. Everying else not sig
+
+```{r}
+sub_tsp_out_id <- all_data %>% group_by(pain) %>% identify_outliers(tsp) %>%
+                               filter(is.extreme == TRUE) %>% pull(id)
+all_data %>% filter(!id %in% sub_tsp_out_id)  %>% rstatix::t_test(
+         tsp ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_tsp_variance)
+all_data %>% filter(!id %in% sub_tsp_out_id) %>% rstatix::wilcox_test(
+         tsp ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+-> Sensitivity analysis: same result
+
+Outlier are in th cov_no_pain group --> no exclusion for es needed
+
+Get effect size and bootrapped ci
+```{r}
+set.seed(777)
+all_data  %>% filter(pain != "Cov_no_pain") %>% mutate(pain = droplevels(pain)) %>% rstatix::cohens_d(
+  tsp ~ pain,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = sub_tsp_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+
+
+#########################   SSP PDT
+
+Create plot
+```{r}
+bp_ssp_pdt_sub <- ggviolin(all_data, x = "pain", y = "ssp_ratio_pdt",
+   fill = "pain",
+   palette = c("#00AFBB","#FC4E07","red"),
+   color = "pain",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "SSP PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("SSP PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Cov_no_pain","Cov_pain")) + rremove("legend")
+
+bp_ssp_pdt_sub_final <- ggpar(bp_ssp_pdt_sub, ylim = c(0,3))
+#pdt_plot_final
+add_summary(bp_ssp_pdt_sub_final, "mean", color = "black",size = 0.5)
+```
+
+
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(pain) %>%
+  rstatix::shapiro_test(ssp_ratio_pdt)
+
+all_data %>%
+  group_by(pain) %>%
+  identify_outliers(ssp_ratio_pdt) %>% select(id,pain,ssp_ratio_pdt,is.outlier,is.extreme)
+
+```
+--> Cov_pain and HC data not normal distributed 
+--> 2 extreme outlier
+
+Test for equal variances
+```{r}
+sub_ssp_pdt_variance <- if(all_data  %>%
+rstatix::levene_test(ssp_ratio_pdt ~ pain) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data  %>%
+rstatix::levene_test(ssp_ratio_pdt ~ pain) 
+```
+
+T-test and wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         ssp_ratio_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_ssp_pdt_variance)
+all_data %>% rstatix::wilcox_test(
+         ssp_ratio_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+no significant differences for all tests
+
+Sensitivity analysis
+```{r}
+sub_ssp_ratio_pdt_id <- all_data %>%
+  group_by(pain) %>%
+  identify_outliers(ssp_ratio_pdt) %>% filter(is.extreme == TRUE) %>% pull(id)
+
+all_data %>% filter(!id %in% sub_ssp_ratio_pdt_id) %>% rstatix::t_test(
+         ssp_ratio_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_ssp_pdt_variance)
+all_data %>% filter(!id %in% sub_ssp_ratio_pdt_id) %>% rstatix::wilcox_test(
+         ssp_ratio_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+--> Sensitivity analysis: no dif
+
+
+########################   SSP PTT
+
+Create plot
+```{r}
+bp_ssp_ptt_sub <- ggviolin(all_data, x = "pain", y = "ssp_ratio_ptt",
+   fill = "pain",
+   palette = c("#00AFBB","#FC4E07","red"),
+   color = "pain",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "SSP ptt values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("SSP ptt"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Cov_no_pain","Cov_pain")) + rremove("legend")
+
+bp_ssp_ptt_sub_final <- ggpar(bp_ssp_ptt_sub, ylim = c(0,3))
+#ptt_plot_final
+add_summary(bp_ssp_ptt_sub_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+ all_data %>%
+  dplyr::group_by(pain) %>%
+  rstatix::shapiro_test(ssp_ratio_ptt)
+
+all_data %>%
+  group_by(pain) %>%
+  identify_outliers(ssp_ratio_ptt) %>% select(id,pain,ssp_ratio_ptt,is.outlier,is.extreme)
+```
+--> Cov_pain and HC data not normal distributed 
+--> 2 extreme outlier
+
+Test for equal variances
+```{r}
+sub_ssp_ptt_variance <- if(all_data %>%
+rstatix::levene_test(ssp_ratio_ptt ~ pain) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data  %>%
+rstatix::levene_test(ssp_ratio_ptt ~ pain)
+```
+
+
+T-Test and Wilcox-test
+```{r}
+all_data %>% rstatix::t_test(
+         ssp_ratio_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_ssp_ptt_variance)
+
+all_data %>% rstatix::wilcox_test(
+         ssp_ratio_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+
+--> T-test: no sig dif between Cov_pain and HC
+--> Wilcox test: sig dif between Cov_pain and HC
+
+
+Sensitivty analysis
+```{r}
+sub_ssp_ratio_ptt_id <- all_data %>%
+  group_by(pain) %>%
+  identify_outliers(ssp_ratio_ptt) %>% filter(is.extreme == TRUE) %>% pull(id)
+
+all_data %>% filter(!id %in% sub_ssp_ratio_ptt_id) %>% rstatix::t_test(
+         ssp_ratio_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_ssp_ptt_variance)
+all_data %>% filter(!id %in% sub_ssp_ratio_ptt_id) %>% rstatix::wilcox_test(
+         ssp_ratio_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+--> sensitivity analyis sig dif between Cov_pain and HC for both (wilcox and t-test)
+
+
+Get effect size and bootstrapped ci
+```{r}
+set.seed(777)
+all_data %>% filter(pain != "Cov_no_pain") %>% mutate(pain = droplevels(pain)) %>% rstatix::cohens_d(
+  ssp_ratio_ptt ~ pain,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = sub_ssp_ptt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+Get effect size and bootstrapped ci (sensitivity analysis)
+```{r}
+set.seed(777)
+all_data %>% filter(pain != "Cov_no_pain") %>% filter(!id %in% sub_ssp_ratio_ptt_id) %>% mutate(pain = droplevels(pain)) %>% rstatix::cohens_d(
+  ssp_ratio_ptt ~ pain,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = sub_ssp_ptt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+#######################################  CPM PDT 
+
+Create plot
+```{r}
+bp_cpm_pdt_sub <- ggviolin(all_data, x = "pain", y = "cpm_dif_pdt",
+   fill = "pain",
+   palette = c("#00AFBB","#FC4E07","red"),
+   color = "pain",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "CPM PDT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PDT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Cov_no_pain","Cov_pain")) + rremove("legend")
+
+bp_cpm_pdt_sub_final <- ggpar(bp_cpm_pdt_sub, ylim = c(-30,100))
+#pdt_plot_final
+add_summary(bp_cpm_pdt_sub_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(pain) %>%
+  rstatix::shapiro_test(cpm_dif_pdt)
+
+all_data %>%
+  group_by(pain) %>%
+  identify_outliers(cpm_dif_pdt) %>% select(id,pain,cpm_dif_pdt,is.outlier,is.extreme)
+```
+--> data are normal distributed
+--> one extreme outlier
+
+
+Test for equal variances
+```{r}
+sub_cpm_dif_pdt_variance <- if(all_data %>%
+rstatix::levene_test(cpm_dif_pdt ~ pain) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(cpm_dif_pdt ~ pain)
+```
+
+
+T-tets and wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         cpm_dif_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_cpm_dif_pdt_variance)
+all_data %>% rstatix::wilcox_test(
+         cpm_dif_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+```
+--> t-test: no sig differences
+--> wilcox test: sig dif between:	Cov_pain and	HC
+
+
+
+Sensitivity  analysis 
+```{r}
+sub_cpm_dif_pdt_id <- all_data %>%
+  group_by(pain) %>%
+  identify_outliers(cpm_dif_pdt) %>% filter(is.extreme == TRUE) %>% pull(id)
+
+all_data%>% filter(!id %in% sub_cpm_dif_pdt_id) %>% rstatix::t_test(
+         cpm_dif_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_cpm_dif_pdt_variance)
+all_data %>% filter(!id %in% sub_cpm_dif_pdt_id) %>% rstatix::wilcox_test(
+         cpm_dif_pdt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+
+sensitivity analysis:
+--> t-test: sig dif between:	Cov_no_pain and	HC
+--> wilcox test: sif dif between: Cov_pain and	HC // and Cov_no_pain and	HC 
+
+Get effect size and bootstrapped ci
+```{r}
+set.seed(777)
+all_data %>% rstatix::cohens_d(
+  cpm_dif_pdt ~ pain,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = sub_cpm_dif_pdt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+
+Get effect size and bootstrapped ci (sensitivity analysis)
+```{r}
+set.seed(777)
+all_data %>% filter(!id %in% sub_cpm_dif_pdt_id) %>% rstatix::cohens_d(
+  cpm_dif_pdt ~ pain,
+  comparisons = NULL,
+  ref.group = NULL,
+  paired = FALSE,
+ # mu = 0,
+  var.equal = sub_cpm_dif_pdt_variance,
+  hedges.correction = FALSE,
+  ci = TRUE,
+  conf.level = 0.95,
+  ci.type = "bca",
+  nboot = 10000
+)
+```
+CAVE: conf intervals include zero
+
+
+#########################  CPM PTT 
+
+Create plot
+```{r}
+bp_cpm_ptt_sub <- ggviolin(all_data, x = "pain", y = "cpm_dif_ptt",
+   fill = "pain",
+   palette = c("#00AFBB","#FC4E07","red"),
+   color = "pain",
+   alpha = 0.9,
+   add = c("boxplot"), #"jitter"
+   add.params = list(fill = "white", color = "black",size = 1),
+   title = "CPM PTT values for post-covid patients and healthy controls",
+  xlab = c("Group"),
+  ylab = c("CPM PTT"),
+  trim = TRUE,
+  #legend = FALSE,
+ 
+  order = c("HC","Cov_no_pain","Cov_pain")) + rremove("legend")
+
+bp_cpm_ptt_sub_final <- ggpar(bp_cpm_ptt_sub, ylim = c(-30,100))
+#ptt_plot_final
+add_summary(bp_cpm_ptt_sub_final, "mean", color = "black",size = 0.5)
+```
+
+Search for extreme outlier and test for normal distribution
+```{r}
+all_data %>%
+  dplyr::group_by(pain) %>%
+  rstatix::shapiro_test(cpm_dif_ptt)
+
+ all_data %>%
+  group_by(pain) %>%
+  identify_outliers(cpm_dif_ptt) %>% select(id,pain,cpm_dif_ptt,is.outlier,is.extreme)
+
+```
+--> HC data not normal distributed
+--> No extreme outlier
+
+Test for equal variances
+```{r}
+sub_cpm_dif_ptt_variance <- if(all_data %>%
+rstatix::levene_test(cpm_dif_ptt ~ pain) %>% select(p) > 0.05){TRUE} else {FALSE}
+all_data %>%
+rstatix::levene_test(cpm_dif_ptt ~ pain)
+```
+
+T-test and wilcox test
+```{r}
+all_data %>% rstatix::t_test(
+         cpm_dif_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE, var.equal = sub_cpm_dif_ptt_variance)
+
+all_data %>% rstatix::wilcox_test(
+         cpm_dif_ptt ~ pain, paired = FALSE, 
+         p.adjust.method = "none", detailed = FALSE)
+
+```
+--> Nothing significant
+
