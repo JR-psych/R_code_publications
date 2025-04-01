@@ -1,0 +1,99 @@
+---
+title: "Calculate test-retest-reliability for outdegree (FMS)"
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+```
+
+
+```{r}
+nw_t1 <- readRDS(file = "networks_rel_t1_fms170325.Rda")
+nw_t2 <- readRDS(file = "networks_rel_t2_fms170325.Rda")
+```
+
+
+
+```{r}
+id_names <- names(nw_t1)
+```
+
+
+
+```{r}
+library(PECAN2)
+```
+
+
+
+
+```{r}
+rel_data_cen <- data.frame(matrix(ncol=3,nrow=0, dimnames=list(NULL, c("id",
+                        "spearman_cor","n_nodes"))))
+```
+
+
+
+```{r}
+for (i in 1:length(id_names)){
+  
+
+  current_name <- id_names[i]
+  t1_data <- nw_t1[[current_name]]
+  t2_data <- nw_t2[[current_name]]
+  
+  t1_nodes <- t1_data$nodes
+  t2_nodes <- t2_data$nodes
+  
+  if(!identical(t1_nodes$id,t2_nodes$id)){stop(paste0(current_name,"_nodes_error"))}
+  
+  t1_edges <- t1_data$edges
+  t2_edges <- t2_data$edges
+  
+  n_nodes <- as.numeric(nrow(t1_nodes))
+  
+  
+t1 <- pecanCen(edges = t1_edges,nodes = t1_nodes,centrality_by = "width")
+t2 <- pecanCen(edges = t2_edges,nodes = t2_nodes,centrality_by = "width")
+
+t1 <- t1 %>% select(id,out_degree)
+t2 <- t2 %>% select(id,out_degree)
+
+t_rel <- merge(t1,t2, by = "id", all = TRUE)
+
+
+  
+    rel_f <- data.frame(id = current_name,
+                        spearman_cor = cor(t_rel$out_degree.x,t_rel$out_degree.y,method = "spearman"),
+                        n_nodes = n_nodes)
+    
+   
+   rel_data_cen <- rbind(rel_data_cen,rel_f)
+   
+  print(current_name)
+}
+
+```
+
+
+
+```{r}
+saveRDS(rel_data_cen, file = "data_rel_fms_cen.Rda" )
+```
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,262 @@
+---
+title: "Combine test-retest-reliability (FMS + MDD) for edges "
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(rstatix)
+```
+
+
+```{r}
+data_d <- readRDS(file = "data_rel_d.Rda")
+data_fms <- readRDS(file = "data_reL_fms.Rda")
+data_d$group <- "MDD"
+data_fms$group <- "FMS"
+```
+
+
+
+```{r}
+data <- merge(data_d,data_fms, by = colnames(data_d), all = TRUE)
+```
+
+
+
+```{r}
+boxplot(data$Spearman_all_pe)
+boxplot(data %>% filter(group == "FMS") %>% pull(Spearman_all_pe))
+boxplot(data %>% filter(group == "MDD") %>% pull(Spearman_all_pe))
+```
+
+
+```{r}
+data %>% rstatix::identify_outliers(Spearman_all_pe)
+data %>% filter(group == "FMS") %>% rstatix::identify_outliers(Spearman_all_pe)
+data %>% filter(group == "MDD") %>% rstatix::identify_outliers(Spearman_all_pe)
+```
+
+
+```{r}
+mean(data$Pearson_all_pe)
+mean(data %>% filter(group == "FMS")%>% pull(Spearman_all_pe))
+mean(data %>% filter(group == "MDD")%>% pull(Spearman_all_pe))
+```
+
+```{r}
+sd(data$Pearson_all_pe)
+sd(data %>% filter(group == "FMS")%>% pull(Spearman_all_pe))
+sd(data %>% filter(group == "MDD")%>% pull(Spearman_all_pe))
+```
+
+
+```{r}
+mean(data %>% filter(!id %in% c(data %>% rstatix::identify_outliers(Spearman_all_pe) %>% pull(id))) %>% pull(Spearman_all_pe)) 
+mean(data %>% filter(group == "FMS") %>% filter(!id %in% c(data %>% rstatix::identify_outliers(Spearman_all_pe) %>% pull(id))) %>% pull(Spearman_all_pe)) 
+mean(data %>% filter(group == "MDD") %>% filter(!id %in% c(data %>% rstatix::identify_outliers(Spearman_all_pe) %>% pull(id))) %>% pull(Spearman_all_pe)) 
+```
+
+```{r}
+sd(data %>% filter(!id %in% c(data %>% rstatix::identify_outliers(Spearman_all_pe) %>% pull(id))) %>% pull(Spearman_all_pe)) 
+sd(data %>% filter(group == "FMS") %>% filter(!id %in% c(data %>% rstatix::identify_outliers(Spearman_all_pe) %>% pull(id))) %>% pull(Spearman_all_pe)) 
+sd(data %>% filter(group == "MDD") %>% filter(!id %in% c(data %>% rstatix::identify_outliers(Spearman_all_pe) %>% pull(id))) %>% pull(Spearman_all_pe)) 
+```
+
+
+
+```{r}
+library(cocor)
+```
+Klintwall et al., 2023 r = 0.53, n = 231
+
+
+Test Overall 
+```{r}
+cocor::cocor.indep.groups(r1.jk = 0.53,
+                          r2.hm = 0.616,
+                          n1 = 231,
+                          n2 = 100,
+                          alternative = "less")
+
+cocor::cocor.indep.groups(r1.jk = 0.53,
+                          r2.hm = 0.63,
+                          n1 = 231,
+                          n2 = 98,
+                          alternative = "less")
+```
+
+Test FMS Group
+```{r}
+cocor::cocor.indep.groups(r1.jk = 0.53,
+                          r2.hm = 0.643,
+                          n1 = 231,
+                          n2 = 50,
+                          alternative = "less")
+cocor::cocor.indep.groups(r1.jk = 0.53,
+                          r2.hm = 0.653,
+                          n1 = 231,
+                          n2 = 47,
+                          alternative = "less")
+```
+
+
+Test MD Group
+```{r}
+cocor::cocor.indep.groups(r1.jk = 0.53,
+                          r2.hm = 0.598,
+                          n1 = 231,
+                          n2 = 50,
+                          alternative = "less")
+cocor::cocor.indep.groups(r1.jk = 0.53,
+                          r2.hm = 0.606,
+                          n1 = 231,
+                          n2 = 49,
+                          alternative = "less")
+```
+
+
+
+```{r}
+median(data %>% pull(Spearman_all_pe)) 
+median(data %>% filter(group == "FMS") %>% pull(Spearman_all_pe)) 
+median(data %>% filter(group == "MDD") %>% pull(Spearman_all_pe)) 
+```
+
+
+```{r}
+data_iv <- readRDS(file = "data_interview_variables.Rda")
+data_iv <- data_iv %>% rename(id = record_id) %>% filter(id %in% data$id)
+```
+
+
+
+
+```{r}
+data_all <- merge(data,data_iv, by = "id", all = TRUE)
+```
+
+
+```{r}
+cor(data_all$Spearman_all_pe,data_all$verfassung, use = "complete.obs")
+```
+
+```{r}
+cor(data_all$Spearman_all_pe,data_all$verfassung_2, use = "complete.obs")
+```
+
+
+```{r}
+cor_mat <- data_all %>% rstatix::cor_mat(vars = c("Spearman_all_pe","verfassung","verfassung_2")) 
+cor_mat
+```
+
+
+```{r}
+cor_mat %>%
+cor_reorder() %>%
+pull_lower_triangle() %>%
+cor_plot(label = TRUE)
+```
+
+```{r}
+cor_mat %>% cor_get_pval()
+```
+
+
+```{r}
+library(compareGroups)
+```
+
+
+```{r}
+descrTable(group ~ dauer_interview_t1 + dauer_erfassung_t1 + dauer_einleitung_t1, data = data_all )
+```
+```{r}
+data_all %>% rstatix::t_test(dauer_interview_t1 ~ group)
+data_all %>% rstatix::t_test(dauer_erfassung_t1 ~ group)
+data_all %>% rstatix::t_test(dauer_einleitung_t1 ~ group)
+```
+
+
+```{r}
+ip <- compareGroups(group ~ dauer_interview_t1 + dauer_erfassung_t1 + dauer_einleitung_t1, data = data_all )
+```
+
+```{r}
+summary(ip)
+```
+
+
+
+1 = online 
+```{r}
+table(data_all %>% filter(group == "FMS") %>% pull(offline_online_t1))
+table(data_all %>% filter(group == "FMS") %>% pull(offline_online_t2))
+```
+
+
+```{r}
+table(data_all %>% filter(group == "MDD") %>% pull(offline_online_t1))
+table(data_all %>% filter(group == "MDD") %>% pull(offline_online_t2))
+```
+
+
+
+```{r}
+table(data_all %>% pull(offline_online_t1))
+table(data_all %>% pull(offline_online_t2))
+```
+
+
+```{r}
+table(data_all$days_bet_i)
+```
+```{r}
+mean(data_all$days_bet_i)
+```
+```{r}
+sd(data_all$days_bet_i)
+```
+
+
+```{r}
+anydata_all$dauer_interview_t1
+```
+
+
+```{r}
+data_na_test <- data_all %>% select(-c(2:7))
+data_no_na <- data_na_test %>% select(-c(starts_with("anmerkungen"))) %>% drop_na()
+data_na <- data_na_test[(which(!(data_na_test$id %in% data_no_na$id))),]
+data_na <- data_na %>% select(-c(starts_with("anmerkungen")))
+data_na <- data_na %>% select(-c(dauer_interview_t1,days_bet_i))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

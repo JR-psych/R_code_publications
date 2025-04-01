@@ -1,0 +1,112 @@
+---
+title: "Calculate test-retest-reliability for edges (MDD)"
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+```
+
+
+```{r}
+nw_t1 <- readRDS(file = "networks_rel_t1_d170325.Rda")
+nw_t2 <- readRDS(file = "networks_rel_t2_d170325.Rda")
+```
+
+
+
+```{r}
+id_names <- names(nw_t1)
+```
+
+
+```{r}
+rel_data <- data.frame(matrix(ncol=6,nrow=0, dimnames=list(NULL, c("id",
+                        "Pearson_standard",
+                        "Spearman_standard",
+                        "Pearson_all_pe",
+                        "Spearman_all_pe",
+                         "n_nodes"))))
+```
+
+
+```{r}
+for (i in 1:length(id_names)){
+  
+
+  current_name <- id_names[i]
+  t1_data <- nw_t1[[current_name]]
+  t2_data <- nw_t2[[current_name]]
+  
+  t1_nodes <- t1_data$nodes
+  t2_nodes <- t2_data$nodes
+  
+  if(!identical(t1_nodes$id,t2_nodes$id)){stop(paste0(current_name,"_nodes_error"))}
+  
+  t1_edges <- t1_data$edges
+  t2_edges <- t2_data$edges
+  
+  n_nodes <- as.numeric(nrow(t1_nodes))
+  
+  
+   d1 <- t1_edges %>% dplyr::select(from,to,width)
+ 
+   d1 <- d1 %>% dplyr::mutate(edge = paste(from,to,sep = "_")) %>% dplyr::select(edge,width) %>% dplyr::rename(w_t1 = width)
+
+   
+   d2 <- t2_edges %>% dplyr::select(from,to,width)
+    
+   d2 <- d2 %>% dplyr::mutate(edge = paste(from,to,sep = "_")) %>% dplyr::select(edge,width) %>% dplyr::rename(w_t2 = width)
+
+    
+   rel_cor <- merge(d1,d2, by = "edge", all.x = TRUE, all.y = TRUE)
+
+   rel_cor0 <- rel_cor
+
+   y <- as.numeric(nrow(rel_cor0))
+   z <- n_nodes*(n_nodes-1)
+   
+   if(y != z){
+   repeat{
+      
+      rel_cor0 <- rel_cor0 %>% dplyr::add_row(edge = "new", w_t1 = 0, w_t2 = 0)
+      y <- y + 1
+      if (y == z){
+        break}}} 
+
+   
+    rel_cor_f <- rel_cor %>% replace(is.na(.), 0)
+    rel_cor0_f <- rel_cor0 %>% replace(is.na(.), 0)
+
+  
+    rel_f <- data.frame(id = current_name,
+                        Pearson_standard = cor(rel_cor_f$w_t1,rel_cor_f$w_t2),
+                        Spearman_standard = cor(rel_cor_f$w_t1,rel_cor_f$w_t2,method = "spearman"),
+                        Pearson_all_pe = cor(rel_cor0_f$w_t1,rel_cor0_f$w_t2),
+                        Spearman_all_pe = cor(rel_cor0_f$w_t1,rel_cor0_f$w_t2,method = "spearman"),
+                        n_nodes = n_nodes)
+    
+   
+   rel_data <- rbind(rel_data,rel_f)
+   
+  print(current_name)
+}
+
+```
+
+
+
+```{r}
+saveRDS(rel_data, file = "data_rel_d.Rda" )
+```
+
+
+
+
+
+

@@ -1,0 +1,476 @@
+---
+title: "Prepare data T2 (MDD)"
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+data_t1 <- read_csv("d_edges_t1.csv")
+data_t2 <- read_csv("d_edges_t2.csv")
+```
+
+
+```{r}
+data_t2 <- data_t2 %>% filter(eingabe_edges_t2_complete == 2)
+data_t1 <- data_t1 %>% filter(record_id %in% data_t2$record_id)
+data_t1$id <- 1:nrow(data_t1)
+data_t2$id <- 1:nrow(data_t2)
+
+```
+
+```{r}
+data1 <- data_t1 %>% select(verwendetesymptome1___1:verwendetesymptome1___93)
+
+names(data1) <- gsub("verwendetesymptome1___", "", names(data1), fixed = TRUE)
+
+df1 <- t(apply(data1, 1, function(row) {
+
+  ifelse(row == 1, colnames(data1)[which(row == 1)], row)
+}))
+
+
+df1 <- as.data.frame(df1)
+
+df1 <- apply(df1, 2, as.numeric)
+df1 <- as.data.frame(df1)
+
+data1_final <- as.data.frame(rowSums(df1))
+names(data1_final) <- "1"
+data1_final$id <- 1:nrow(data1_final)
+```
+
+#2
+```{r}
+data2 <- data_t1 %>% select(verwendetesymptome2___1:verwendetesymptome2___93)
+
+names(data2) <- gsub("verwendetesymptome2___", "", names(data2), fixed = TRUE)
+
+df2 <- t(apply(data2, 1, function(row) {
+
+  ifelse(row == 1, colnames(data2)[which(row == 1)], row)
+}))
+
+
+df2 <- as.data.frame(df2)
+
+df2 <- apply(df2, 2, as.numeric)
+df2 <- as.data.frame(df2)
+
+data2_final <- as.data.frame(rowSums(df2))
+names(data2_final) <- "2"
+data2_final$id <- 1:nrow(data2_final)
+```
+
+```{r}
+data3 <- data_t1 %>% select(verwendetesymptome3___1:verwendetesymptome3___93)
+
+names(data3) <- gsub("verwendetesymptome3___", "", names(data3), fixed = TRUE)
+
+df3 <- t(apply(data3, 1, function(row) {
+ 
+  ifelse(row == 1, colnames(data3)[which(row == 1)], row)
+}))
+
+
+df3 <- as.data.frame(df3)
+
+df3 <- apply(df3, 2, as.numeric)
+df3 <- as.data.frame(df3)
+
+data3_final <- as.data.frame(rowSums(df3))
+names(data3_final) <- "3"
+data3_final$id <- 1:nrow(data3_final)
+```
+
+```{r}
+data4 <- data_t1 %>% select(verwendetesymptome4___1:verwendetesymptome4___93)
+
+names(data4) <- gsub("verwendetesymptome4___", "", names(data4), fixed = TRUE)
+
+df4 <- t(apply(data4, 1, function(row) {
+
+  ifelse(row == 1, colnames(data4)[which(row == 1)], row)
+}))
+
+
+df4 <- as.data.frame(df4)
+
+df4 <- apply(df4, 2, as.numeric)
+df4 <- as.data.frame(df4)
+
+data4_final <- as.data.frame(rowSums(df4))
+names(data4_final) <- "4"
+data4_final$id <- 1:nrow(data4_final)
+```
+
+```{r}
+data5 <- data_t1 %>% select(verwendetesymptome5___1:verwendetesymptome5___93)
+
+names(data5) <- gsub("verwendetesymptome5___", "", names(data5), fixed = TRUE)
+
+df5 <- t(apply(data5, 1, function(row) {
+
+  ifelse(row == 1, colnames(data5)[which(row == 1)], row)
+}))
+
+
+df5 <- as.data.frame(df5)
+
+df5 <- apply(df5, 2, as.numeric)
+df5 <- as.data.frame(df5)
+
+data5_final <- as.data.frame(rowSums(df5))
+names(data5_final) <- "5"
+data5_final$id <- 1:nrow(data5_final)
+```
+
+
+```{r}
+data6 <- data_t1 %>% select(verwendetesymptome6___1:verwendetesymptome6___93)
+
+names(data6) <- gsub("verwendetesymptome6___", "", names(data6), fixed = TRUE)
+
+df6 <- t(apply(data6, 1, function(row) {
+
+  ifelse(row == 1, colnames(data6)[which(row == 1)], row)
+}))
+
+
+df6 <- as.data.frame(df6)
+
+df6 <- apply(df6, 2, as.numeric)
+df6 <- as.data.frame(df6)
+
+data6_final <- as.data.frame(rowSums(df6))
+names(data6_final) <- "6"
+data6_final$id <- 1:nrow(data6_final)
+```
+
+
+```{r}
+data7 <- data_t1 %>% select(verwendetesymptome7___1:verwendetesymptome7___93)
+
+names(data7) <- gsub("verwendetesymptome7___", "", names(data7), fixed = TRUE)
+
+df7 <- t(apply(data7, 1, function(row) {
+  
+  ifelse(row == 1, colnames(data7)[which(row == 1)], row)
+}))
+
+
+df7 <- as.data.frame(df7)
+
+df7 <- apply(df7, 2, as.numeric)
+df7 <- as.data.frame(df7)
+
+data7_final <- as.data.frame(rowSums(df7))
+names(data7_final) <- "7"
+data7_final$id <- 1:nrow(data7_final)
+```
+
+```{r}
+data8 <- data_t1 %>% select(verwendetesymptome8___1:verwendetesymptome8___93)
+
+names(data8) <- gsub("verwendetesymptome8___", "", names(data8), fixed = TRUE)
+
+df8 <- t(apply(data8, 1, function(row) {
+ 
+  ifelse(row == 1, colnames(data8)[which(row == 1)], row)
+}))
+
+
+df8 <- as.data.frame(df8)
+
+df8 <- apply(df8, 2, as.numeric)
+df8 <- as.data.frame(df8)
+
+data8_final <- as.data.frame(rowSums(df8))
+names(data8_final) <- "8"
+data8_final$id <- 1:nrow(data8_final)
+```
+
+```{r}
+data9 <- data_t1 %>% select(verwendetesymptome9___1:verwendetesymptome9___93)
+
+names(data9) <- gsub("verwendetesymptome9___", "", names(data9), fixed = TRUE)
+
+df9 <- t(apply(data9, 1, function(row) {
+ 
+  ifelse(row == 1, colnames(data9)[which(row == 1)], row)
+}))
+
+
+df9 <- as.data.frame(df9)
+
+df9 <- apply(df9, 2, as.numeric)
+df9 <- as.data.frame(df9)
+
+data9_final <- as.data.frame(rowSums(df9))
+names(data9_final) <- "9"
+data9_final$id <- 1:nrow(data9_final)
+```
+
+
+```{r}
+data10 <- data_t1 %>% select(verwendetesymptome10___1:verwendetesymptome10___93)
+
+names(data10) <- gsub("verwendetesymptome10___", "", names(data10), fixed = TRUE)
+
+df10 <- t(apply(data10, 1, function(row) {
+  
+  ifelse(row == 1, colnames(data10)[which(row == 1)], row)
+}))
+
+
+df10 <- as.data.frame(df10)
+
+df10 <- apply(df10, 2, as.numeric)
+df10 <- as.data.frame(df10)
+
+data10_final <- as.data.frame(rowSums(df10))
+names(data10_final) <- "10"
+data10_final$id <- 1:nrow(data10_final)
+```
+
+
+```{r}
+merged_data <- Reduce(function(x, y) merge(x, y, by = "id", all = TRUE), list(data1_final,data2_final,data3_final,data4_final,data5_final,data6_final,
+    data7_final,data8_final,data9_final,data10_final))
+```
+
+
+
+
+```{r}
+
+edges_data <- data_t2 %>% select(edge01_t2:edge90_t2,id)
+colnames(edges_data) <- sub('_t2','',colnames(edges_data))
+```
+
+
+```{r}
+
+edges_long <- tidyr::pivot_longer(edges_data, cols = -id, names_to = NULL) %>%
+  separate(value, into = c("part1", "part2"), sep = "-", extra = "merge")
+```
+
+
+```{r}
+edges_long$na_check <- is.na(edges_long$part1) & is.na(edges_long$part2)
+edges_long <- edges_long %>% filter(na_check == FALSE) %>% select(-na_check) # dont use drop in a in case some edges are wrong
+```
+
+
+```{r}
+test_numeric <- as.numeric(edges_long$part2)
+which(is.na(test_numeric))
+```
+
+
+
+```{r}
+
+edges_wide <- tidyr::pivot_wider(edges_long, names_from = part1, values_from = part2)
+```
+
+
+```{r}
+cn <- colnames(edges_wide)
+pattern <- "^\\d+_\\d+$"
+# Find column names that DO NOT match the pattern
+non_matching_cols <- cn[!grepl(pattern, cn)]
+non_matching_cols_id <- non_matching_cols[-(which(non_matching_cols == "id"))]
+```
+
+
+```{r}
+ew <- edges_wide %>%
+                     mutate(across(where(is.list), ~ lapply(.,function(x) if (is.null(x)) NA else x))) %>% 
+                     mutate(across(where(is.list), unlist))
+
+ew <- apply(ew, 2, as.numeric)
+ew <- as.data.frame(ew)
+```
+
+
+
+```{r}
+
+nodes_long <- tidyr::pivot_longer(merged_data, cols = -id, names_to = "delete", values_to = "names")
+
+nodes_long <- nodes_long %>% select(-delete)
+# Create a dummy value column with a constant value of 1 to indicate the presence of each value
+nodes_long$value <- 1
+nodes_long <- nodes_long %>% filter(names != 0)
+
+
+nodes_wide <- tidyr::pivot_wider(nodes_long, names_from = names, values_from = value)
+nw <- nodes_wide %>% mutate(across(where(is.list), ~ lapply(.,function(x) if (is.null(x)) NA else x))) %>% 
+                     mutate(across(where(is.list), unlist))
+```
+
+
+
+```{r}
+n_names <- colnames(nw)
+n_names <- n_names[-(which(n_names == "id"))]
+```
+
+```{r}
+werte <- data_t1 %>% select(id,wert_1:wert_93) # braucht man fast gar nicht
+```
+
+```{r}
+nw2 <- nw
+for (i in n_names) {
+     for (j in nw2$id) {
+    if(!is.na(nw2[which(nw2$id == j),i])){
+      if(is.na(werte[[which(werte$id == j), paste0("wert_",i)]])){nw2[which(nw2$id == j),i] <- 99999}
+      else{nw2[which(nw2$id == j),i] <- werte[[which(werte$id == j), paste0("wert_",i)]]}
+      }
+     }
+}
+```
+
+```{r}
+which(nw2 == 99999, arr.ind = TRUE)
+```
+id 8 , node "35" "Selbstverletzung"; Person did not see the item and added it. Thats why we cant get the value automatically.
+Value is 760
+
+```{r}
+nw2[8,44] <- 760
+```
+
+check whether back-transformation is equal
+```{r}
+nw_check <- nw2
+nw_check[!is.na(nw_check)] <- 1
+nw_check$id <- nw2$id
+identical(nw_check,nw)
+all.equal(nw_check,nw)
+```
+
+```{r}
+data_new <- merge(nw2,ew, by = "id", all = TRUE)
+```
+
+Delete edges which consists oh one added node by the participant as we cannot interpret them
+```{r}
+cols_to_drop <- grep("(^94|94$|^95|95$|^96|96$|^97|97$|^98|98$|^99|99$|^100|100$|^101|101$|^102|102$|^103|103$|^104|104$)", colnames(data_new), value = TRUE)
+```
+
+```{r}
+data_new <- data_new %>% select(-all_of(cols_to_drop))
+```
+
+
+```{r}
+library(PECAN2)
+```
+
+```{r}
+which(colnames(data_new) == "52")
+```
+Check whether there are any edges without a corresponding node
+```{r}
+
+warning_log <- data.frame(
+  id = integer(),
+  warning_message = character(),
+  stringsAsFactors = FALSE
+)
+
+
+participant_ids <- 1:50  
+
+for (i in participant_ids) {
+ 
+  result <- tryCatch(
+    {
+     
+      pecanExtract(data = data_new, id_row = i,nodes = 2:80,edges = 81:ncol(data_new),edges_sep = "_")
+      NULL 
+    },
+    warning = function(w) {
+     
+      warning_log <<- rbind(warning_log, data.frame(
+        id = i,
+        warning_message = conditionMessage(w),
+        stringsAsFactors = FALSE
+      ))
+      return(NULL)  
+    },
+    error = function(e) {
+      
+      return(NULL)
+    }
+  )
+}
+
+
+print(warning_log)
+
+```
+
+
+```{r}
+networks_rel_t2 <- list()
+participant_ids <- 1:50 
+
+
+for (i in participant_ids) {
+
+  
+   
+      networks_rel_t2[[i]] <- pecanExtract(data = data_new, id_row = i,nodes = 2:80,edges = 81:ncol(data_new),edges_sep = "_")}
+     
+   
+
+```
+
+```{r}
+names(networks_rel_t2) <- data_t2$record_id
+```
+
+```{r}
+saveRDS(networks_rel_t2, file = "networks_rel_t2_d170325.Rda" )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

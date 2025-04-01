@@ -1,0 +1,501 @@
+---
+title: "Qualitative Analysis"
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(readxl)
+library(table1)
+```
+
+```{r}
+pecan_d_qual <- read_csv("pecan_d_qual_all.csv")
+
+```
+
+```{r}
+data_d <- pecan_d_qual %>% select(record_id,grund_fehlendeverbindung1:grund_fehlendeverbindung90,
+                                sonstigergrund1:sonstigergrund90, sonstigergrund_t2_1:sonstigergrund_t2_90,grund_neueverbindungt2_1:grund_neueverbindungt2_90)
+```
+
+
+```{r}
+data_d <- data_d %>% mutate_all(as.character)
+```
+
+
+```{r}
+data_d_long <- data_d %>% pivot_longer(cols = -record_id, 
+               names_to = "edge",  
+               values_to = "category") %>% drop_na()
+```
+
+
+```{r}
+data_d_long$category_new <- data_d_long$category
+```
+
+```{r}
+test_d <- data_d_long %>%
+  filter(str_detect(edge, "^sonstigergrund"))
+```
+
+```{r}
+testd_2 <- data_d_long %>% filter(category == 7)
+```
+
+```{r}
+data_d_sub <- data_d_long %>%
+  filter(str_detect(edge, "^sonstigergrund"))
+data_d_sub_keep <- data_d_long %>%
+  filter(!str_detect(edge, "^sonstigergrund")) %>% filter(category != 7)
+```
+
+
+######################### FMS ##################################4
+```{r}
+pecan_fms_qual <- read_csv("pecan_fms_qual_all.csv")
+```
+
+```{r}
+data_fms <- pecan_fms_qual %>% select(record_id,grund_fehlendeverbindung1:grund_fehlendeverbindung90,
+                                sonstigergrund1:sonstigergrund90, sonstigergrund_t2_1:sonstigergrund_t2_90,grund_neueverbindungt2_1:grund_neueverbindungt2_90)
+```
+
+
+```{r}
+data_fms <- data_fms %>% mutate_all(as.character)
+```
+
+
+```{r}
+data_fms_long <- data_fms %>% pivot_longer(cols = -record_id, 
+               names_to = "edge", 
+               values_to = "category") %>% drop_na()
+```
+
+
+
+```{r}
+data_fms_long$category_new <- data_fms_long$category
+```
+
+
+```{r}
+test_fms <- data_fms_long %>%
+  filter(str_detect(edge, "^sonstigergrund"))
+```
+
+```{r}
+test_fms2 <- data_fms_long %>% filter(category == 7)
+```
+
+```{r}
+data_fms_sub <- data_fms_long %>%
+  filter(str_detect(edge, "^sonstigergrund"))
+data_fms_sub_keep <- data_fms_long %>%
+  filter(!str_detect(edge, "^sonstigergrund")) %>% filter(category != 7)
+```
+
+
+```{r}
+data_qual_other <- merge(data_fms_sub,data_d_sub, all = TRUE)
+```
+
+
+```{r}
+data_qual<- merge(data_fms_sub_keep,data_d_sub_keep, all = TRUE)
+```
+
+```{r}
+#writexl::write_xlsx(data_qual_other,path = "qual_all.xlsx")
+```
+
+
+Add list after QA by 2 independent researchers
+```{r}
+data_new_cat <- read_excel("qual_all_recoded_clean.xlsx")
+data_new_cat <- data_new_cat %>% select(-category)
+```
+
+
+```{r}
+data_qual <- data_qual %>% select(-category)
+```
+
+
+
+```{r}
+data_qual_final <- merge(data_qual,data_new_cat, by = names(data_qual), all = TRUE)
+```
+
+
+
+```{r}
+data_qual_final$group <- ifelse(data_qual_final$record_id %in% data_d$record_id,"MDD","FMS")
+```
+
+
+
+```{r}
+table(data_qual_final %>% filter(group == "MDD") %>% pull(category_new))
+table(data_qual_final %>% filter(group == "FMS") %>% pull(category_new))
+```
+
+
+```{r}
+data_qual_final <- data_qual_final %>%
+  mutate(edge2 = case_when(
+    grepl("^sonstigergrund_t2", edge) ~ "new",   
+    grepl("^sonstigergrund", edge) ~ "missing",  
+    TRUE ~ edge 
+  ))  %>%
+  mutate(edge2 = case_when(
+    grepl("^grund_neueverbindungt2", edge) ~ "new",   
+    grepl("^grund_fehlendeverbindung", edge) ~ "missing",  
+    TRUE ~ edge2  
+  ))
+```
+
+
+```{r}
+table(data_qual_final$edge2)
+```
+
+```{r}
+table(data_qual_final %>% filter(group == "FMS") %>% pull(edge2))  
+```
+
+```{r}
+table(data_qual_final %>% filter(group == "MDD") %>% pull(edge2))  
+```
+
+
+
+Missing	
+  
+  1	Keine Erklärung			
+	2	Kausalität ist andersrum/unklar			
+	3	Vergessen			
+	4	Symptome stehen nicht in Verbindung zueinander			
+	5	Stimmung war anders am Erhebungstag			
+	6	hat sich im zeitlichen Verlauf verändert			
+	8	Symptom schwer zu differenzieren		
+```{r}
+table(data_qual_final %>% filter(edge2 == "missing") %>% pull(category_new))
+
+```
+
+NEW	
+  
+  1	Keine Erklärung			
+	2	neue Erkenntnis			
+	3	Vergessen			
+	4	Symptome stehen nicht in Verbindung zueinander			
+	5	Stimmung war anders am Erhebungstag			
+	6	hat sich im zeitlichen Verlauf verändert			
+	8	Symptom schwer zu differenzieren			
+	9	Kausalität ist andersrum/unklar			
+
+```{r}
+table(data_qual_final %>% filter(edge2 == "new") %>% pull(category_new))
+```
+
+
+```{r}
+missing_per_person <- data_qual_final %>% group_by(record_id) %>% filter(edge2 == "missing") %>% summarise(n_edges = n())
+```
+
+
+```{r}
+new_per_person <- data_qual_final %>% group_by(record_id) %>% filter(edge2 == "new") %>% summarise(n_edges = n())
+```
+
+
+```{r}
+table(new_per_person$record_id)
+```
+
+```{r}
+table(missing_per_person$record_id)
+```
+
+
+
+```{r}
+missing_per_person %>% rstatix::identify_outliers(n_edges)
+```
+
+
+
+
+
+```{r}
+table(missing_per_person$n_edges)
+mean(missing_per_person$n_edges)
+```
+
+```{r}
+boxplot(missing_per_person$n_edges) 
+```
+
+
+
+```{r}
+table(new_per_person$n_edges)
+mean(new_per_person$n_edges)
+```
+
+```{r}
+new_per_person %>% rstatix::identify_outliers(n_edges)
+```
+
+
+
+```{r}
+boxplot(new_per_person$n_edges) 
+```
+
+
+```{r}
+new_oa <- data_qual_final %>% group_by(record_id) %>% summarise(n_edges = n())
+```
+
+
+```{r}
+boxplot(new_oa  %>% pull(n_edges)) 
+mean(new_oa  %>% pull(n_edges)) 
+```
+
+
+
+Missing	
+  
+  1	Keine Erklärung			
+	2	Kausalität ist andersrum/unklar			
+	3	Vergessen			
+	4	Symptome stehen nicht in Verbindung zueinander			
+	5	Stimmung war anders am Erhebungstag			
+	6	hat sich im zeitlichen Verlauf verändert			
+	8	Symptom schwer zu differenzieren			
+	
+	
+	A = Unknown = Keine Erklärung		(1)
+	B = Methods artifacts =  Kausalität ist andersrum/unklar + (2)
+	                         Vergessen + (3)
+	                         Symptome stehen nicht in Verbindung zueinander	+ (4)
+	                         Symptom schwer zu differenzieren	(8)				
+	
+	
+  C = Symptom variation = Stimmung war anders am Erhebungstag (5)	+ 
+                          hat sich im zeitlichen Verlauf verändert (6)	
+  
+
+
+```{r}
+missing_new <- data_qual_final %>% group_by(record_id) %>% filter(edge2 == "missing")
+missing_new$over_cat <- car::recode(missing_new$category_new,"1 = 'A';2:4 = 'B'; 8 = 'B'; 5:6 = 'C'")
+```
+
+```{r}
+table(missing_new$category_new)
+```
+
+
+
+```{r}
+missing_new$category_new <- factor(missing_new$category_new, levels = c(1,2,3,4,5,6,8), labels = c("No explanation",                                                                            "Causality is the other way around/ not clear",
+           "Forgot to mention the edge during the second interview"  ,                                  "Symptoms are not related (mistake at T1)" , 
+           "One of the symptoms was perceived differently on the day of the interview",
+           "Symptom relation changed between the interviews",
+           "Symptoms were hard to differentiate"
+           )
+                                     )
+
+missing_new$over_cat <- factor(missing_new$over_cat, levels = c("A","B","C"), labels = c("Unknown",                                                                            "Methodological reasons",
+           "Symptom variation"))
+
+
+label(missing_new$category_new) <- "Sub-categories"
+label(missing_new$over_cat) <- "Final categories"
+
+
+
+```
+
+
+```{r}
+table1::table1(~ over_cat + category_new | group, data = missing_new )
+```
+
+
+```{r}
+table(missing_new$over_cat)
+```
+```{r}
+table(missing_new %>% filter(group == "FMS") %>% pull(over_cat))
+```
+
+
+  NEW	
+  
+  1	Keine Erklärung			
+	2	neue Erkenntnis			
+	3	Vergessen			
+	4	Symptome stehen nicht in Verbindung zueinander			
+	5	Stimmung war anders am Erhebungstag			
+	6	hat sich im zeitlichen Verlauf verändert			
+	8	Symptom schwer zu differenzieren			
+	9	Kausalität ist andersrum/unklar		
+  
+  
+  
+  A = Unknown = Keine Erklärung	(1)
+	B = Methods articfacts = Kausalität ist andersrum/unklar + (9)
+	                         Vergessen + (3)
+	                         Symptome stehen nicht in Verbindung zueinander	+ (4)
+	                         Symptom schwer zu differenzieren					(8)
+	
+	
+  C = Symptom variation = Stimmung war anders am Erhebungstag (5)	+ hat sich im zeitlichen Verlauf verändert	(6)
+  
+  D = Possible benefits = neue Erkenntnis (2)	
+
+
+```{r}
+new_new <- data_qual_final %>% group_by(record_id) %>% filter(edge2 == "new") 
+new_new$over_cat <- car::recode(new_new$category_new,"1 = 'A';9 = 'B';3:4 = 'B'; 8 = 'B'; 5:6 = 'C'; 2 = 'D'")
+```
+
+```{r}
+new_new$category_new <- factor(new_new$category_new, levels = c(1,2,3,4,5,6,8,9), labels = c("No explanation", 
+  "New insight",
+  "Forgot to mention the edge during the first interview", 
+  "Symptoms are not related (mistake at T2)",
+  "One of the symptoms was perceived differently on the day of the interview",
+  "Symptom relation changed between the interviews",
+  "Symptoms were hard to differentiate",
+  "Causality is the other way around/ not clear"
+                                              
+        
+           
+           )
+                                     )
+
+new_new$over_cat <- factor(new_new$over_cat, levels = c("A","B","C","D"), labels = c("Unknown", "Methodological reasons",
+           "Symptom variation","Possible benefits"))
+
+
+label(new_new$category_new) <- "Sub-categories"
+label(new_new$over_cat) <- "Final categories"
+
+
+
+```
+
+
+
+
+```{r}
+table1::table1(~ over_cat + category_new | group, data = new_new )
+```
+
+
+
+
+
+
+```{r}
+59/847
+214/847
+458/847
+116/847
+
+```
+
+```{r}
+88 / 996
+256 / 996
+455 / 996
+197 / 996
+
+```
+
+
+```{r}
+147 / 1843
+470 / 1843
+913 / 1843
+313 / 1843
+
+```
+
+
+
+```{r}
+table(new_new$over_cat)
+```
+
+```{r}
+table(new_new$over_cat)/970
+```
+
+
+```{r}
+table(new_new %>% filter(group == "FMS") %>% pull(over_cat))
+```
+
+
+```{r}
+table(new_new %>% filter(group == "FMS") %>% pull(over_cat)) / 449
+```
+
+
+
+```{r}
+table(missing_new$over_cat)
+```
+
+```{r}
+table(new_new$over_cat)
+```
+
+```{r}
+79 + 68
+323 + 147
+471 + 442
+```
+
+```{r}
+(79 + 68) / 1843
+(323 + 147) / 1843
+(471 + 442) / 1843
+313 / 1843
+```
+
+```{r}
+ 0.07976126 + 0.255019 +  0.495388 + 0.1698318
+```
+
+
+
+```{r}
+table(missing_new %>% filter(group == "FMS") %>% pull(over_cat))
+```
+
+
+
+
+
+
+
+
+
+
+

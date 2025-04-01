@@ -1,0 +1,675 @@
+---
+title: "Feedback analysis"
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+
+```
+
+
+```{r}
+data_t1_fms <- read_csv("feedback_t1_fms.csv")
+data_t2_fms <- read_csv("feedback_t2_fms.csv")
+
+names_fms <- readRDS("id_names_fms170325.Rda")
+
+data_t1_fms  <- data_t1_fms %>% filter(record_id %in% names_fms) 
+data_t2_fms <- data_t2_fms %>% filter(record_id %in% names_fms) 
+```
+
+
+```{r}
+data_t1_d <- read_csv("feedback_t1_d.csv")
+data_t2_d <- read_csv("feedback_t2_d.csv")
+
+
+names_d <- readRDS("id_names_d170325.Rda")
+
+data_t1_d <- data_t1_d %>% filter (record_id %in% names_d)
+data_t2_d <- data_t2_d %>% filter (record_id %in% names_d)
+```
+
+
+
+```{r}
+data_d <- merge(data_t1_d,data_t2_d, by = "record_id")
+```
+
+2 participants reply to t2 feedback questions
+```{r}
+data_fms <- merge(data_t1_fms,data_t2_fms, by = "record_id", all = TRUE)
+```
+
+
+```{r}
+data_d$group <- "MDD"
+data_fms$group <- "FMS"
+```
+
+
+```{r}
+data <- merge(data_d,data_fms, all = TRUE)
+```
+
+
+```{r}
+library(compareGroups)
+library(rempsyc)
+library(table1)
+```
+
+
+
+
+######## Feasibility: Feedbackquestions t1:
+
+1) The purpose of the PECAN questionnaire was clear to me. == 1. Der Zweck des PECAN-Interviews war mir klar. (feedbackt1_1)
+2) I always knew what I was supposed to do. == 2. Ich wusste stets was ich machen soll. (feedbackt1_2)
+3) I was overwhelmed by the PECAN questionnaire  == 3. Ich war mit der Bearbeitung des PECAN-Interviews überfordert. feedbackt1_3
+4) Completing the PECAN questionnaire led to stress. == 4. Die Bearbeitung des PECAN-Interviews führte zu Stresserleben. feedbackt1_4
+5) Completing the PECAN questionnaire helped me to better understand my complaints. ==  5. Die Bearbeitung des PECAN-Interviews hat mir dabei   
+   geholfen, meine Beschwerden besser zu verstehen. feedbackt1_5
+6) I can imagine completing the PECAN questionnaire on my own before starting psychotherapy. == 6. Ich kann mir vorstellen PECAN als Fragebogen auch ohne anwesende Studienleitung vor einer beginnenden Psychotherapie selbstständig auszufüllen. feedbackt1_6 
+
+Own: Das Interview ging zu lange == The interview took     too long, feedbackt1_7
+8. Es war hilfreich, dass die Studienleitung mich durch das Interview 
+begleitet hat == It was helpful.   feedbackt1_10
+ 
+ 
+ 
+ 9. Gibt es etwas, das du an der Methode verbessern wollen würdest?
+ 10.Hast du sonsge Anmerkungen zur Methode?
+
+###################### Deleted #############################
+8) The instructions (explanations of the tasks) of 
+the PECAN questionnaire / EMA were: difficult 
+to understand - easy to understand 
+9) Overall, filling out the PECAN questionnaire / 
+EMA was: difficult - easy 
+
+11) The problems assessed in the PECAN 
+questionnaire / EMA: did not apply to me - 
+applied to me  
+
+
+7) I think the PECAN questionnaire is a good way to prepare for therapy during the waiting period.
+--> Das Item haben wir gestrichen
+###################################################
+
+
+```{r}
+label(data$feedbackt1_1) <- "The purpose of the PECAN interview was clear to me."
+label(data$feedbackt1_2) <- "I always knew what I was supposed to do."
+label(data$feedbackt1_3) <- "I was overwhelmed by the PECAN interview."
+label(data$feedbackt1_4) <- "Completing the PECAN interview led to stress."
+label(data$feedbackt1_5) <- "Completing the PECAN interview helped me to better understand my complaints."
+label(data$feedbackt1_6) <- "I can imagine filling out PECAN as a questionnaire on my own before starting psychotherapy, even without the presence of the study administration.."
+label(data$feedbackt1_7) <- "The interview took too long."
+label(data$feedbackt1_10) <- "It was helpful that the study administrator accompanied me through the interview."
+
+```
+
+```{r}
+descrTable(group~ feedbackt1_1 + 
+              feedbackt1_2 + 
+              feedbackt1_3 +
+              feedbackt1_4 +
+              feedbackt1_5 +
+              feedbackt1_6 +
+              feedbackt1_7 +
+              feedbackt1_10, data = data, Q1=0, Q3=1)
+
+```
+
+
+```{r}
+data %>% rstatix::t_test(feedbackt1_3 ~ group)
+data %>% rstatix::t_test(feedbackt1_4 ~ group)
+data %>% rstatix::t_test(feedbackt1_6 ~ group)
+```
+
+
+
+
+```{r}
+table1::table1(~ feedbackt1_1 + 
+              feedbackt1_2 + 
+              feedbackt1_3 +
+              feedbackt1_4 +
+              feedbackt1_5 +
+              feedbackt1_6 +
+              feedbackt1_7 +
+              feedbackt1_10 | group, data = data)
+```
+
+
+
+
+```{r}
+data %>% group_by(group) %>% summarise(min_fb1 = min(feedbackt1_1),
+                                       min_fb2 = min(feedbackt1_2), 
+                                       min_fb3 = min(feedbackt1_3), 
+                                       min_fb4 = min(feedbackt1_4), 
+                                       min_fb5 = min(feedbackt1_5), 
+                                       min_fb6 = min(feedbackt1_6), 
+                                       min_fb7 = min(feedbackt1_7),
+                                       min_fb10 = min(feedbackt1_10),
+                                       max_fb1 = max(feedbackt1_1),
+                                       max_fb2 = max(feedbackt1_2), 
+                                       max_fb3 = max(feedbackt1_3), 
+                                       max_fb4 = max(feedbackt1_4), 
+                                       max_fb5 = max(feedbackt1_5), 
+                                       max_fb6 = max(feedbackt1_6), 
+                                       max_fb7 = max(feedbackt1_7),
+                                       max_fb10 = max(feedbackt1_10)) %>% pivot_longer(cols = -group,names_to = "stat",values_to = "value")
+```
+
+Other t1  Questions:
+Normal week: 1 = yes
+
+```{r}
+table(data$alltagswoche_t1)
+```
+
+What would you improve about the method?
+
+```{r}
+response_improve_t1 <- data %>% select(group,feedbackt1_8) %>% drop_na() %>% filter(feedbackt1_8 != "-")
+```
+
+```{r}
+response_other_t1 <- data %>% select(group,feedbackt1_9) %>% drop_na() %>% filter(feedbackt1_9 != "-")
+```
+
+
+T2 Evaluation: 
+
+Have you thought more about the connections between your complaints in the last week or have you noticed them more often?
+1 = yes
+```{r}
+table(data$feedbackt2_1)
+```
+Please describe in more detail
+```{r}
+response_thoughts_t2 <- data %>% select(group,feedbackt2_1_2) %>% drop_na() %>% filter(feedbackt2_1_2 != "-")
+
+```
+
+
+Did the interview make conections clearer to you that you weren´t aware of before?
+1 = yes
+```{r}
+table(data$feedbackt2_2)
+```
+Please describe in more detail
+```{r}
+response_insights_t2 <- data %>% select(group,feedbackt2_2_2) %>% drop_na() %>% filter(feedbackt2_2_2 != "-")
+```
+
+
+Did the PCPR interview last week have any other (positive or negative) effects on you?
+1 = yes
+```{r}
+table(data$feedbackt2_3)
+```
+Please describe in more detail
+```{r}
+response_effects_t2 <- data %>% select(group,feedbackt2_3_2) %>% drop_na() %>% filter(feedbackt2_3_2 != "-")
+```
+
+
+```{r}
+writexl::write_xlsx(response_effects_t2,"response_effects_t2.xlsx")
+```
+
+
+response_insights_t2
+```{r}
+writexl::write_xlsx(response_insights_t2,"response_insights_t2.xlsx")
+```
+
+
+
+
+## Comparison between the edited and unedited network 
+```{r}
+data_edit <- data %>% select(record_id,group,feedbackt2_4:feedbackt2_12,feedbackt2_14:feedbackt2_22) %>% select(-c(feedbackt2_9_2,feedbackt2_19_2)) %>% 
+  rename  (unedit_4 = feedbackt2_4,
+           edit_4 = feedbackt2_14,
+           unedit_5 = feedbackt2_5,
+           edit_5 = feedbackt2_15,
+           unedit_6 = feedbackt2_6,
+           edit_6 = feedbackt2_16,
+           unedit_7 = feedbackt2_7,
+           edit_7 = feedbackt2_17,
+           unedit_8 = feedbackt2_8,
+           edit_8 = feedbackt2_18,
+           unedit_9 = feedbackt2_9,
+           edit_9 = feedbackt2_19,
+           unedit_10 = feedbackt2_10,
+           edit_10 = feedbackt2_20,
+           unedit_11 = feedbackt2_11,
+           edit_11 = feedbackt2_21,
+           unedit_12 = feedbackt2_12,
+           edit_12 = feedbackt2_22)
+```
+
+
+
+```{r}
+data_edit <- data_edit %>% pivot_longer(
+  cols = -c(record_id,group),
+  names_to = c("network","feedbackq"),
+  names_sep = "_",
+  values_drop_na = TRUE)
+
+```
+
+```{r}
+data_edit <- data_edit %>% pivot_wider(names_from = "feedbackq",values_from = "value", names_prefix = "fb_")
+```
+
+
+
+```{r}
+label(data_edit$fb_4) <- "The network shows how my complaints are interrelated"
+label(data_edit$fb_5) <- "The network helps me to better understand my complaints."
+label(data_edit$fb_6) <- "The network could help me to talk about my symptoms at the start of therapy"
+label(data_edit$fb_7) <- "The network shows me what I need to change in order to feel better."
+label(data_edit$fb_8) <- "The network helps me to understand what I can expect if I change something."
+label(data_edit$fb_9) <- "Engaging with the network motivates me to change something."
+label(data_edit$fb_10) <- "Providing the results of this network will help my therapist to better understand and work on my complaints."
+label(data_edit$fb_11) <- "The network reflects my complaints well."
+label(data_edit$fb_12) <- "I am happy with the way the network is presented."
+```
+
+
+
+
+```{r}
+descrTable(network ~ fb_4 + fb_5 + fb_6 + fb_7 + fb_8 + fb_9 + fb_10 + fb_11 + fb_12, data = data_edit)
+
+```
+
+
+
+
+
+
+
+
+
+```{r}
+table1::table1(~ fb_4 + fb_5 + fb_6 + fb_7 + fb_8 + fb_9 + fb_10 + fb_11 + fb_12  | network, data = data_edit)
+```
+
+
+
+
+
+
+```{r}
+data_edit <- data_edit %>% mutate(nw_rating = (fb_4 + fb_5 + fb_6 + fb_7 + fb_8 + fb_9 + fb_10 + fb_11 + fb_12)/9) 
+```
+
+
+```{r}
+mean(data_edit %>% pull(nw_rating), na.rm = TRUE)
+mean(data_edit %>% filter(network == "unedit") %>% pull(nw_rating), na.rm = TRUE)
+mean(data_edit %>% filter(network == "edit") %>% pull(nw_rating), na.rm = TRUE)
+
+sd(data_edit %>% pull(nw_rating), na.rm = TRUE)
+sd(data_edit %>% filter(network == "unedit") %>% pull(nw_rating), na.rm = TRUE)
+sd(data_edit %>% filter(network == "edit") %>% pull(nw_rating), na.rm = TRUE)
+
+
+```
+
+
+```{r}
+data_edit_wide <- data_edit %>% pivot_wider(id_cols = record_id  ,  names_from = network,values_from = nw_rating) %>% drop_na()
+```
+
+
+```{r}
+mean(data_edit_wide$unedit)
+sd(data_edit_wide$unedit)
+mean(data_edit_wide$edit)
+sd(data_edit_wide$edit)
+```
+
+
+
+
+```{r}
+ptt <- t.test(data_edit_wide$unedit,data_edit_wide$edit, paired = TRUE)
+ptt
+```
+
+
+
+
+
+
+```{r}
+rstatix::t_test(data_edit, usability ~ group)
+```
+
+
+Did you edit you networ
+1 = yes
+```{r}
+table(data$feedbackt2_13)
+```
+
+What are you motivated to change?
+```{r}
+respone_change_unedited <- data %>% select(group,feedbackt2_9_2) %>% drop_na() %>% filter(feedbackt2_9_2 != "-")
+```
+
+```{r}
+respone_change_edited <- data %>% select(group,feedbackt2_19_2) %>% drop_na() %>% filter(feedbackt2_19_2 != "-")
+```
+
+Editing the network was really important to me
+#ggf noch mit compare groups
+```{r}
+table(data$feedbackt2_23)
+mean(data$feedbackt2_23,na.rm = TRUE)
+sd(data$feedbackt2_23,na.rm = TRUE)
+```
+
+
+Patients usability ratings
+
+I think the networks are absolutely useful.	==  Ich halte die Netzwerke für absolut nützlich (feedbackt2_33)
+
+I think I will use the networks. == Ich denke, dass ich die Netzwerke nutzen werde. (feedbackt2_34)
+
+I think I can use the networks to make changes on my own to improve my mental health. ==	Ich denke, dass ich die Netzwerke nutzen kann, um eigenständig Veränderungen zur Verbesserung meiner psychischen Gesundheit vorzunehmen. (feedbackt2_36)
+ 
+The visual representation of the results in the form of a network has helped me to gain a better understanding of my complaints and the connections between them.	== Die visuelle Darstellung der Netzwerke hat mir geholfen, die Zusammenhänge besser zu verstehen. (feedbackt2_24)
+
+The visual representation of the results in the form of a network is useful. == Die Darstellung der Ergebnisse in Form von einem Netzwerk ist nützlich. (feedbackt2_25)
+
+```{r}
+label(data$feedbackt2_33) <- "I think the networks are absolutely useful."
+label(data$feedbackt2_34) <- "I think I will use the networks."
+label(data$feedbackt2_36) <- "I think I can use the networks to make changes on my own to improve my mental health."
+label(data$feedbackt2_24) <- "The visual representation of the results in the form of a network has helped me to gain a better understanding of my complaints and the connections between them."
+label(data$feedbackt2_25) <- "The visual representation of the results in the form of a network is useful."
+```
+
+
+```{r}
+descrTable(group ~ feedbackt2_33 + 
+              feedbackt2_34 + 
+              feedbackt2_36 +
+              feedbackt2_24 +
+              feedbackt2_25, data = data)
+
+```
+
+
+```{r}
+data <- data %>% mutate(usability = (feedbackt2_33 + feedbackt2_34 + feedbackt2_36 + feedbackt2_24 + feedbackt2_25)/5)
+```
+
+
+```{r}
+mean(data %>% pull(usability), na.rm = TRUE)
+mean(data %>% filter(group == "FMS") %>% pull(usability), na.rm = TRUE)
+mean(data %>% filter(group == "MDD") %>% pull(usability), na.rm = TRUE)
+
+sd(data %>% pull(usability), na.rm = TRUE)
+sd(data %>% filter(group == "FMS") %>% pull(usability), na.rm = TRUE)
+sd(data %>% filter(group == "MDD") %>% pull(usability), na.rm = TRUE)
+```
+
+```{r}
+rstatix::t_test(data, usability ~ group)
+```
+
+
+
+```{r}
+which(is.na(data$usability))
+```
+
+
+
+
+
+
+Patients' comprehensibility ratings
+
+
+1) I can use the networks without having to learn anything new == Ich kann die Netzwerke nutzen, ohne etwas Neues lernen zu müssen.  (feedbackt2_35)
+
+2) I found looking at the networks stressful. == Das Betrachten der Netzwerke habe ich als stressig erlebt. (feedbackt2_37)
+
+3) I found the networks easy to understand.	== Ich fand die Netzwerke einfach zu verstehen. (feedbackt2_38)
+
+4) I think I can understand the networks without the support of another person.	== Ich denke, dass ich die Netzwerke auch ohne die Unterstützung einer anderen Person verstehen kann. (feedbackt2_39)
+
+5) I found the networks intuitive. == Ich fand die Netzwerke intuitiv. (feedbackt2_41)
+
+6) I felt confident in interpreting the networks. == Ich fühlte mich bei der Interpretaon der Netzwerke sicher. 
+(feedbackt2_42)
+
+7) I can imagine that most people learn to understand the networks very quickly. == Ich kann mir vorstellen, dass die meisten Leute sehr schnell lernen, die Netzwerke zu verstehen.	(feedbackt2_40)
+
+```{r}
+label(data$feedbackt2_35) <- "I can use the networks without having to learn anything new."
+label(data$feedbackt2_37) <- "I found looking at the networks stressful."
+label(data$feedbackt2_38) <- "I found the networks easy to understand."
+label(data$feedbackt2_39) <- "I think I can understand the networks without the support of another person."
+label(data$feedbackt2_41) <- "I found the networks intuitive."
+label(data$feedbackt2_42) <- "I felt confident in interpreting the networks."
+label(data$feedbackt2_40) <- "I can imagine that most people learn to understand the networks very quickly."
+```
+
+
+
+```{r}
+descrTable(group ~ feedbackt2_35 + 
+              feedbackt2_37 + 
+              feedbackt2_38 +
+              feedbackt2_39 +
+              feedbackt2_41 +
+              feedbackt2_42 +
+              feedbackt2_40, data = data)
+
+```
+
+```{r}
+is.numeric(data$feedback2t2_35)
+```
+
+
+```{r}
+table1::table1(~ feedbackt2_33 + 
+              feedbackt2_34 + 
+              feedbackt2_36 +
+              feedbackt2_24 +
+              feedbackt2_25 + 
+              feedbackt2_35 + 
+              feedbackt2_37 + 
+              feedbackt2_38 +
+              feedbackt2_39 +
+              feedbackt2_41 +
+              feedbackt2_42 +
+              feedbackt2_40 | group, data = data)
+```
+
+
+```{r}
+
+data$feedbackt2_37 <- as.numeric(data$feedbackt2_37)
+data$feedbackt2_38 <- as.numeric(data$feedbackt2_38) 
+data$feedbackt2_39 <- as.numeric(data$feedbackt2_39) 
+data$feedbackt2_41 <- as.numeric(data$feedbackt2_41) 
+data$feedbackt2_42 <- as.numeric(data$feedbackt2_42)
+data$feedbackt2_40 <- as.numeric(data$feedbackt2_40)
+  
+data <- data %>% mutate(compre = (feedbackt2_35 + 
+              feedbackt2_37 + 
+              feedbackt2_38 +
+              feedbackt2_39 +
+              feedbackt2_41 +
+              feedbackt2_42 +
+              feedbackt2_40)/7)
+```
+
+
+
+
+```{r}
+mean(data %>% pull(compre), na.rm = TRUE)
+mean(data %>% filter(group == "FMS") %>% pull(compre), na.rm = TRUE)
+mean(data %>% filter(group == "MDD") %>% pull(compre), na.rm = TRUE)
+
+sd(data %>% pull(compre), na.rm = TRUE)
+sd(data %>% filter(group == "FMS") %>% pull(compre), na.rm = TRUE)
+sd(data %>% filter(group == "MDD") %>% pull(compre), na.rm = TRUE)
+```
+```{r}
+rstatix::t_test(data, compre ~ group)
+```
+
+
+```{r}
+table(data$compre)
+```
+
+
+The MeCUE (Minge et al., 2017; Minge & Thüring, 2018)
+Das Design der Netzwerke ist attraktiv == The design looks attractive.
+Das Netzwerk ist kreativ gestaltet. == The product is creatively designed. 
+Die Darstellung der Ergebnisse in Form von einem Netzwerk ist stilvoll. == The product is stylish.
+
+Mittelwert Berechnung (1:5 Scale)
+
+feedbackt2_26
+feedbackt2_27
+feedbackt2_28
+
+```{r}
+table(data$feedbackt2_26)
+table(data$feedbackt2_27)
+table(data$feedbackt2_28)
+any(is.na(data$feedbackt2_26))
+any(is.na(data$feedbackt2_27))
+any(is.na(data$feedbackt2_28))
+
+data <- data %>% mutate(mecue = (feedbackt2_26 + feedbackt2_27 + feedbackt2_28)/3)
+table(data$mecue)
+```
+
+```{r}
+rstatix::t_test(data, mecue ~ group)
+```
+```{r}
+descrTable(group ~ mecue,data = data)
+```
+
+```{r}
+table1::table1(~ mecue | group ,data = data)
+```
+
+
+
+
+pragmatic presentation: 
+1. Die Darstellung der Ergebnisse in Form von einem Netzwerk ist:
+ a. 1 behindernd ……………………5 unterstützend    obstructive vs. supportive
+ b. 1 kompliziert ……………………5 einfach         complicated vs easy
+ c. 1 ine&zient……………………...5 effizient       inefficient vs efficient 
+ d. 1verwirrend…………………… 5übersichtlich      confusing vs clear
+ 
+ 
+hedonic presentation 
+2. Die visuelle Darstellung der Netzwerke ist:
+ a. 1 langweilig…………………….. 5 spannend      boring vs exciting
+ b. 1 uninteressant………………….. 5 interessant not interesting vs interesting
+ c. 1 konvenonell…………………..5 originell     conventional vs inventive
+ d. 1herkömmlich…………………..5neuartig         usual vs. leading edge
+ 
+ 
+Orginally: 7-point Likert scale. The answers are scaled from -3 (fully agree with negative term) to +3 (fully agree with positive term. In line with Scholten: 1:5 recoded to -2 + 2 (Saksia fragen)
+
+Recode to -2 to +2 
+```{r}
+data$feedbackt2_teilb1a <- car::recode(data$feedbackt2_teilb1a, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+data$feedbackt2_teilb1b <- car::recode(data$feedbackt2_teilb1b, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+data$feedbackt2_teilb1c <- car::recode(data$feedbackt2_teilb1c, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+data$feedbackt2_teilb1d <- car::recode(data$feedbackt2_teilb1d, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+
+data$feedbackt2_teilb2a <- car::recode(data$feedbackt2_teilb2a, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+data$feedbackt2_teilb2b <- car::recode(data$feedbackt2_teilb2b, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+data$feedbackt2_teilb2c <- car::recode(data$feedbackt2_teilb2c, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+data$feedbackt2_teilb2d <- car::recode(data$feedbackt2_teilb2d, "1 = -2; 2 = -1; 3 = 0; 4 = 1; 5 = 2")
+```
+
+
+```{r}
+data <- data %>% mutate(pragmatic = (feedbackt2_teilb1a + feedbackt2_teilb1b + feedbackt2_teilb1c + feedbackt2_teilb1d)/4,
+                        hedonic = (feedbackt2_teilb2a + feedbackt2_teilb2b + feedbackt2_teilb2c + feedbackt2_teilb2d)/4)
+```
+
+```{r}
+rstatix::t_test(data, pragmatic ~ group)
+rstatix::t_test(data, hedonic ~ group)
+```
+
+```{r}
+descrTable(group ~ pragmatic + hedonic,data = data)
+```
+```{r}
+table1::table1( ~ pragmatic + hedonic | group,data = data)
+```
+
+
+Own Questions T2
+
+What would you change about the presentation of the networks
+```{r}
+respone_change_presentation <- data %>% select(group,feedbackt2_29) %>% drop_na() %>% filter(feedbackt2_29 != "-")
+```
+
+Do you have any other comments on the networks?
+```{r}
+respone_comments_network <- data %>% select(group,feedbackt2_30) %>% drop_na() %>% filter(feedbackt2_30 != "-")
+```
+
+
+I think it makes sense to reduce the network to the most important connections as a first step/ or at the beginning of a therapy
+```{r}
+table(data$feedbackt2_31)
+mean(data$feedbackt2_31, na.rm = TRUE)
+sd(data$feedbackt2_31, na.rm = TRUE)
+```
+The network contains complaints that are relevant to me
+```{r}
+table(data$feedbackt2_32)
+mean(data$feedbackt2_32, na.rm = TRUE)
+sd(data$feedbackt2_32, na.rm = TRUE)
+```
+Which are missing
+
+```{r}
+data$feedbackt2_32_2
+```
+
+
+
+
+
+

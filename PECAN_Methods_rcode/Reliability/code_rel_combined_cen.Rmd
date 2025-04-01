@@ -1,0 +1,70 @@
+---
+title: "Combine test-retest-reliability (FMS + MDD) for outdegree "
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(rstatix)
+```
+
+
+```{r}
+data_d <- readRDS(file = "data_rel_d_cen.Rda")
+data_fms <- readRDS(file = "data_rel_fms_cen.Rda")
+data_d$group <- "MDD"
+data_fms$group <- "FMS"
+```
+
+
+```{r}
+data <- merge(data_d,data_fms, by = colnames(data_d), all = TRUE)
+```
+
+
+```{r}
+mean(data %>% pull(spearman_cor))
+mean(data %>% filter(group == "FMS")%>% pull(spearman_cor))
+mean(data %>% filter(group == "MDD")%>% pull(spearman_cor))
+```
+
+```{r}
+sd(data %>% pull(spearman_cor))
+sd(data %>% filter(group == "FMS")%>% pull(spearman_cor))
+sd(data %>% filter(group == "MDD")%>% pull(spearman_cor))
+```
+
+
+```{r}
+mean(data %>% filter(!id %in% c(data %>% rstatix::identify_outliers(spearman_cor) %>% pull(id))) %>% pull(spearman_cor))
+mean(data %>% filter(group == "FMS") %>% filter(!id %in% c(data %>% rstatix::identify_outliers(spearman_cor) %>% pull(id))) %>% pull(spearman_cor))
+mean(data %>% filter(group == "MDD")%>% filter(!id %in% c(data %>% rstatix::identify_outliers(spearman_cor) %>% pull(id))) %>% pull(spearman_cor))
+```
+```{r}
+sd(data %>% filter(!id %in% c(data %>% rstatix::identify_outliers(spearman_cor) %>% pull(id))) %>% pull(spearman_cor))
+sd(data %>% filter(group == "FMS") %>% filter(!id %in% c(data %>% rstatix::identify_outliers(spearman_cor) %>% pull(id))) %>% pull(spearman_cor))
+sd(data %>% filter(group == "MDD")%>% filter(!id %in% c(data %>% rstatix::identify_outliers(spearman_cor) %>% pull(id))) %>% pull(spearman_cor))
+```
+
+
+```{r}
+median(data %>% pull(spearman_cor)) 
+median(data %>% filter(group == "FMS") %>% pull(spearman_cor)) 
+median(data %>% filter(group == "MDD") %>% pull(spearman_cor)) 
+```
+
+
+
+```{r}
+boxplot(data$spearman_cor)
+boxplot(data %>% filter(group == "FMS") %>% pull(spearman_cor))
+boxplot(data %>% filter(group == "MDD") %>% pull(spearman_cor))
+```
+
+
+

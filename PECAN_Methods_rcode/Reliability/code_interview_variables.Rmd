@@ -1,0 +1,77 @@
+---
+title: "Prepare interview variables"
+author: "JR"
+date: "2025-03-30"
+output: html_document
+---
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(readr)
+data_t1_d <- read_csv("d_edges_t1.csv")
+data_t2_d <- read_csv("d_edges_t2.csv")
+data_t1_fms <- read_csv("fms_edges_t1.csv")
+data_t2_fms <- read_csv("fms_edges_t2.csv")
+```
+
+
+```{r}
+data_t2_d <- data_t2_d %>% filter(eingabe_edges_t2_complete == 2)
+data_t1_d <- data_t1_d %>% filter(record_id %in% data_t2_d$record_id)
+
+data_t1_d <- data_t1_d %>% select(record_id,anmerkungen_t1,anmerkungen_t1_2,verfassung,offline_online_t1,
+                                  dauer_interview_t1,dauer_erfassung_t1,dauer_interview_t1,dauer_einleitung_t1)
+data_t2_d <- data_t2_d %>% select(record_id,anmerkungen_t2,anmerkungen_t2_2,days_bet_i,verfassung_2,offline_online_t2,
+                                  dauer_interview_t2,dauer_erfassung_t2,dauer_nwbearbeitung_t2,alltagswoche_t2)
+data_d <- merge(data_t1_d,data_t2_d, by = "record_id")
+```
+
+
+
+```{r}
+data_t2_fms <- data_t2_fms %>% filter(eingabe_edges_t2_complete == 2)
+data_t1_fms <- data_t1_fms %>% filter(record_id %in% data_t2_fms$record_id)
+
+data_t1_fms <- data_t1_fms %>% select(record_id,anmerkungen_t1,anmerkungen_t1_2,verfassung,offline_online_t1,
+                                  dauer_interview_t1,dauer_erfassung_t1,dauer_interview_t1,dauer_einleitung_t1)
+data_t2_fms <- data_t2_fms %>% select(record_id,anmerkungen_t2,anmerkungen_t2_2,days_bet_i,verfassung_2,offline_online_t2,
+                                  dauer_interview_t2,dauer_erfassung_t2,dauer_nebearbeiten_t2,alltagswoche_t2)
+data_fms <- merge(data_t1_fms,data_t2_fms, by = "record_id")
+data_fms <- data_fms %>% rename(dauer_nwbearbeitung_t2 = dauer_nebearbeiten_t2)
+```
+
+
+
+```{r}
+data_ip <- merge(data_d,data_fms,by = names(data_d),all = TRUE)
+```
+
+
+```{r}
+saveRDS(data_ip,file = "data_interview_variables.Rda")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
