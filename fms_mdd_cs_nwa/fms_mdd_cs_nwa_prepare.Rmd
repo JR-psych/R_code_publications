@@ -1,0 +1,644 @@
+---
+title: "Cross Sectional Network Analysis"
+author: "JR"
+date: "03 04 2025"
+output: html_document
+---
+
+Load packages
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(ggplot2)
+library(networktools)
+library(car)
+library(EGAnet)
+library(lavaan)
+```
+
+Load data and recode sf12
+```{r}
+data_nwa_og <- read_excel("data_nwa.xlsx")
+data_nwa <- read_excel("data_nwa.xlsx")
+```
+
+Delete Variables Step 1 
+```{r}
+data_nwa <- data_nwa %>% select(-c(1,3:38)) %>% # keep id col and delete all demographics values,medication and the four pain related question which were not part of the assessment between 2010 and 2012
+                         select(-c(phq13,phq14,phq15)) %>% # Delete: Abuse, #Open ended, Medication
+                         select(-c(starts_with("iip"))) %>% # Delete: IIP
+                         select(-c(starts_with("fesv"))) %>% # Delete: FESV
+                         select(-c(starts_with("index"))) %>%# Get rid of index variables
+                         select(-c(ases9,ases10)) # Only NA values
+```
+
+
+Delete Variables Step 2
+```{r}
+data_nwa  <- data_nwa %>% select(-c(
+  sf2:sf7, sf9, # SF12
+  phq1d, #PHQ-som
+  phq3b:phq4k,phq5b:phq10e, # PHQ- Diagnostic Modules
+  phq12b,phq12d:phq12g,phq12i, # PHQ-stress
+  fiq2:fiq4, # FIQ
+  ads12)) #ADS
+```
+
+Get number of variables after step1 and step2
+```{r}
+ncol(data_nwa) - 1 # id col
+```
+
+Step 3 include variables:
+Reverse score items so that for every variable higher scores indicated a more negative outcome
+```{r}
+data_nwa$sf12 <- car::recode(data_nwa$sf12,"1 = 5; 2 = 4; 3 = 3; 4 = 2; 5 = 1")
+data_nwa$sf11 <- car::recode(data_nwa$sf11,"1 = 6; 2 = 5; 3 = 4; 4 = 3; 5 = 2; 6 = 1")
+data_nwa$ads9 <- car::recode(data_nwa$ads9,"0 = 3; 1 = 2; 2 = 1; 3 = 0")
+
+data_nwa$ases1 <- car::recode(data_nwa$ases1,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+data_nwa$ases2 <- car::recode(data_nwa$ases2,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+data_nwa$ases3 <- car::recode(data_nwa$ases3,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+data_nwa$ases4 <- car::recode(data_nwa$ases4,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+data_nwa$ases5 <- car::recode(data_nwa$ases5,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+data_nwa$ases6 <- car::recode(data_nwa$ases6,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+data_nwa$ases7 <- car::recode(data_nwa$ases7,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+data_nwa$ases8 <- car::recode(data_nwa$ases8,"1 = 10; 2 = 9; 3 = 8; 4 = 7; 5 = 6; 6 = 5; 7 = 4; 8 = 3; 9 = 2; 10 = 1")
+```
+
+Directly include symptom categories with only one item 
+```{r}
+items_include_1c <- c("sf1", # Perceived Health
+                   "sf12", #Social Impact
+                   "phq1h",# Dizziness
+                   "phq1i",# Fainting
+                   "phq1j",# Heart Racing
+                   "phq1k",# Short Breath
+                   "phq2a",# Anhedonia
+                   "phq2e",# Appetite
+                   "phq2h",# Activity Level
+                   "phq2i", # Suicidal Ideation
+                   "phq3a", # Panic Attacks
+                   "phq12a", # Health Worry
+                   "phq12j", # Trauma
+                   "fiq8", # Morning Stiffness
+                  "ads10", # Less Talk
+                   "ads14", # Disliked
+                   "ads15" # Motivation
+                   
+)
+```
+
+
+```{r}
+summary(data_nwa$phq2g)
+```
+
+Select items for categories with 2 symptoms (see supplements)
+Estimate new variable Gastrointestinal Discomfort
+```{r}
+items_include_2c <- c("sf8", # Pain Impact
+                      "phq12c", # Libido Loss
+                      "ads11", # Loneliness
+                      "phq2f", # Self Esteem
+                      "phq2g") # Concentration
+
+# Create new gastro variable
+table(data_nwa$phq1l) # Check whether data are correct
+table(data_nwa$phq1m) # Check whether data are correct
+
+gastro_data <- data_nwa %>% select(id,phq1l,phq1m) %>% 
+                            drop_na() %>% 
+                            mutate(gastro = phq1l + phq1m) %>%
+                            select(id,gastro)
+
+# Add to items include vector
+items_include_2c <- c(items_include_2c,"gastro") # Gastrointestinal Discomfort new Variable
+```
+
+
+Items with 3 or more symptoms:
+
+
+Pain
+```{r}
+pain_data <- data_nwa %>% select(id,phq1a,phq1b,phq1c,phq1f,phq1g,fiq5) %>% drop_na()
+
+for (i in 2:7) {
+  table_pain <- table(pain_data[,i])
+  print(table_pain)
+}
+```
+
+```{r}
+ega_pain <- EGA(pain_data[,2:6]) # no id and no pain sev included
+summary(ega_pain)
+```
+
+```{r}
+pain_data$pain_sev <- pain_data$fiq5
+pain_data <-  pain_data %>% mutate(pain_symptoms = phq1a + phq1b + phq1c + phq1f + phq1g) %>% select(id,pain_sev,pain_symptoms)
+
+```
+
+
+Depressed
+```{r}
+items_mood <- c("id",
+                "sf11",
+                "phq2b",
+                "fiq10",
+                "ads2",
+                "ads4",
+                "ads9",
+                "ads13")
+
+table(data_nwa$sf11) # Check whether data are correct
+table(data_nwa$phq2b) # Check whether data are correct
+table(data_nwa$fiq10) # Check whether data are correct
+table(data_nwa$ads2) # Check whether data are correct
+table(data_nwa$ads4) # Check whether data are correct
+table(data_nwa$ads9) # Check whether data are correct
+table(data_nwa$ads13) # Check whether data are correct
+
+dep_cfa_data <- data_nwa %>% select(all_of(items_mood)) %>% drop_na() #DWLS does not allow missings
+ega_dep <- EGA(dep_cfa_data[,2:8]) # Check for unidimensionality
+summary(ega_dep)
+```
+
+EGA suggest unidimensionality
+
+Perform Cfa for dep. mood items
+```{r}
+# Set fiq10 first because it has the best phrasing
+model_dep <- 'dep =~  fiq10  + phq2b + ads2 + ads4 + ads9 + ads13 + sf11' 
+fit_dep <- cfa(model_dep, data = dep_cfa_data, ordered = c("phq2b","ads2","ads4","ads13","ads9"))
+summary(fit_dep,standardized = TRUE)
+```
+
+Get latent factor scores for depressed
+```{r}
+dep_scores <- lavPredict(fit_dep)
+dep_cfa_data$depressed <- as.vector(dep_scores)
+dep_cfa_data <- dep_cfa_data %>% select(id,depressed)
+```
+
+
+Anxious 
+```{r}
+items_anxious <- c("id",
+                   "phq5a",
+                   "fiq9",
+                   "ads1",
+                   "ads7")
+
+table(data_nwa$phq5a) # Check whether data are correct
+table(data_nwa$fiq9) # Check whether data are correct
+table(data_nwa$ads1) # Check whether data are correct
+table(data_nwa$ads7) # Check whether data are correct
+
+
+anxious_cfa_data <- data_nwa %>% select(all_of(items_anxious)) %>% drop_na() #DWLS does not allow missings
+ega_anxious <- EGA(anxious_cfa_data[,2:5]) # Check for unidimensionality
+summary(ega_anxious)
+```
+EGA suggest unidimensionality
+
+Perform cfa
+```{r}
+# Set phq5a first because it has the best phrasing
+model_anxious <- 'anxious =~  phq5a + fiq9 + ads1 + ads7' 
+fit_anxious <- cfa(model_anxious, data = anxious_cfa_data, ordered = c("phq5a","ads1","ads7"))
+summary(fit_anxious,standardized = TRUE)
+```
+
+Get factor scores for anxious
+```{r}
+anxious_scores <- lavPredict(fit_anxious)
+anxious_cfa_data$anxious <- as.vector(anxious_scores)
+anxious_cfa_data <- anxious_cfa_data %>% select(id,anxious)
+```
+
+
+Sleep Quality
+```{r}
+items_sleep_quality <- c("id",
+              "phq2c",
+              "fiq7",
+              "ads8")
+
+table(data_nwa$phq2c) # Check whether data are correct
+table(data_nwa$fiq7) # Check whether data are correct
+table(data_nwa$ads8) # Check whether data are correct
+
+sleep_quality_cfa_data <- data_nwa %>% select(all_of(items_sleep_quality)) %>% drop_na() #DWLS does not allow missings
+ega_sleep_quality <- EGA(sleep_quality_cfa_data[,2:4]) #Check for unidimensionality
+summary(ega_sleep_quality)
+```
+
+EGA suggest unidimensionality
+```{r}
+# Set phq2c first because it has the best phrasing
+model_sleep_quality <- 'sleep_quality =~  phq2c + ads8 + fiq7' 
+fit_sleep_quality <- cfa(model_sleep_quality, data = sleep_quality_cfa_data, ordered = c("phq2c","ads8"))
+summary(fit_sleep_quality,standardized = TRUE)
+```
+
+```{r}
+sleep_quality_scores <- lavPredict(fit_sleep_quality)
+sleep_quality_cfa_data$sleep_quality <- as.vector(sleep_quality_scores)
+sleep_quality_cfa_data <- sleep_quality_cfa_data %>% select(id,sleep_quality)
+```
+
+
+
+Fatigue
+```{r}
+items_fatigue <- c("id",
+              "sf10",
+              "phq2d",
+              "fiq6",
+              "ads5")
+
+table(data_nwa$sf10) # Check whether data are correct
+table(data_nwa$phq2d) # Check whether data are correct
+table(data_nwa$fiq6) # Check whether data are correct
+table(data_nwa$ads5) # Check whether data are correct
+
+
+fatigue_cfa_data <- data_nwa %>% select(all_of(items_fatigue)) %>% drop_na() #DWLS does not allow missings
+ega_fatigue <- EGA(fatigue_cfa_data[2:5]) #Check for unidimensionality
+summary(ega_fatigue)
+```
+
+
+```{r}
+# Set phq2c first because it has the best phrasing
+model_fatigue <- 'fatigue =~  fiq6 + phq2d + ads5 + sf10' 
+fit_fatigue <- cfa(model_fatigue, data = fatigue_cfa_data, ordered = c("phq2d","ads5"))
+summary(fit_fatigue,standardized = TRUE)
+```
+
+```{r}
+fatigue_scores <- lavPredict(fit_fatigue)
+fatigue_cfa_data$fatigue <- as.vector(fatigue_scores)
+fatigue_cfa_data <- fatigue_cfa_data %>% select(id,fatigue)
+```
+
+
+Self-efficacy 
+```{r}
+items_ases <- c("id",
+                "ases1",
+                "ases2",
+                "ases3",
+                "ases4",
+                "ases5",
+                "ases6",
+                "ases7",
+                "ases8"
+              )
+
+table(data_nwa$ases1) # Check whether data are correct
+table(data_nwa$ases2) # Check whether data are correct
+table(data_nwa$ases3) # Check whether data are correct
+table(data_nwa$ases4) # Check whether data are correct
+table(data_nwa$ases5) # Check whether data are correct
+table(data_nwa$ases6) # Check whether data are correct
+table(data_nwa$ases7) # Check whether data are correct
+table(data_nwa$ases8) # Check whether data are correct
+```
+Some items are 0 and some are random numbers higher than 10 e.g. 62 or 21. Filter those cases out
+
+```{r}
+ases_data_control <- data_nwa %>% select(all_of(items_ases)) %>% drop_na()  #DWLS does not allow missings
+                                                        
+table(ases_data_control$ases1) # Check whether data are correct
+table(ases_data_control$ases2) # Check whether data are correct
+table(ases_data_control$ases3) # Check whether data are correct
+table(ases_data_control$ases4) # Check whether data are correct
+table(ases_data_control$ases5) # Check whether data are correct
+table(ases_data_control$ases6) # Check whether data are correct
+table(ases_data_control$ases7) # Check whether data are correct
+table(ases_data_control$ases8) # Check whether data are correct
+
+nrow(ases_data_control)
+```
+
+
+```{r}
+ases_data_control2 <- data_nwa %>% select(all_of(items_ases)) %>% drop_na() %>%  #DWLS does not allow missings
+                                                          #DWLS does not allow missings
+                                                         filter(ases1 > 10 | ases1 < 1 |                                                                                                          ases2 > 10 |   ases2 < 1 |
+                                                               ases3 > 10 |   ases3 < 1 |
+                                                               ases4 > 10 |   ases4 < 1 |
+                                                               ases5 > 10 |   ases5 < 1 |
+                                                               ases6 > 10 |   ases6 < 1 |
+                                                               ases7 > 10 |   ases7 < 1 |
+                                                                ases8 > 10 |   ases8 < 1)
+nrow(ases_data_control2)
+```
+
+Now everything is right
+```{r}
+ases_cfa_data <- data_nwa %>% select(all_of(items_ases)) %>% drop_na() %>%  
+                                                      
+                                                         filter(ases1 <= 10 &   ases1  >= 1,                                                                                                      ases2 <= 10 &   ases2 >= 1, 
+                                                                ases3 <= 10 &   ases3 >= 1,
+                                                                ases4 <= 10 &   ases4 >= 1,
+                                                                ases5 <= 10 &   ases5 >= 1,
+                                                                ases6 <= 10 &   ases6 >= 1,
+                                                                ases7 <= 10 &   ases7 >= 1,
+                                                                ases8 <= 10 &   ases8 >= 1)
+nrow(ases_cfa_data)
+```
+
+```{r}
+ega_ases <- EGA(ases_cfa_data[2:9])
+summary(ega_ases)
+```
+
+
+
+```{r}
+ases_cfa_data <- ases_cfa_data %>% mutate(self_e = (ases1 + ases2 + ases3 + ases4 + ases5 + ases6 + ases7 + ases8)/8) %>%
+select(id,self_e)
+```
+
+
+Daily living skills
+```{r}
+fi_d <- data_nwa %>% select(id,fiq1a:fiq1j,ffbh1:ffbh18) 
+for (i in 2:ncol(fi_d)) {
+  table_result <-table(fi_d[,i])
+  print(table_result)
+  }
+```
+
+Some fiq1 items have wrong numbers (higher than 3). We filter these out.
+```{r}
+fi_control <- data_nwa %>% select(id,fiq1a:fiq1j) %>% filter(
+                                                     fiq1a >= 4 |
+                                                     fiq1b >= 4 | 
+                                                     fiq1c >= 4 | 
+                                                     fiq1d >= 4 | 
+                                                     fiq1e >= 4 | 
+                                                     fiq1f >= 4 | 
+                                                     fiq1g >= 4 | 
+                                                     fiq1h >= 4 | 
+                                                     fiq1i >= 4 | 
+                                                     fiq1j >= 4)
+```
+
+23
+
+
+
+Functional impairment
+```{r}
+fi_data <- data_nwa %>% select(id,fiq1a:fiq1j,ffbh1:ffbh18) %>% filter(
+                                                     fiq1a < 4 | is.na(fiq1a),
+                                                     fiq1b < 4 | is.na(fiq1b),
+                                                     fiq1c < 4 | is.na(fiq1c),
+                                                     fiq1d < 4 | is.na(fiq1d),
+                                                     fiq1e < 4 | is.na(fiq1e),
+                                                     fiq1f < 4 | is.na(fiq1f),
+                                                     fiq1g < 4 | is.na(fiq1g),
+                                                     fiq1h < 4 | is.na(fiq1h),
+                                                     fiq1i < 4 | is.na(fiq1i),
+                                                     fiq1j < 4 | is.na(fiq1j))
+
+fi_data$fiq_sum <- rowMeans(fi_data[,2:11],na.rm = TRUE)
+```
+
+
+```{r}
+fi_data <- fi_data %>% select(-c(2:11)) # drop single fiq items
+```
+
+
+```{r}
+ega_fi <- EGA(fi_data[2:20])
+summary(ega_fi)
+```
+
+
+```{r}
+hands_cfa_data <- fi_data %>% select(id,ffbh1,ffbh3,ffbh4) %>% drop_na() %>% mutate(hands = (ffbh1 + ffbh3 + ffbh4)) %>% select(id,hands)
+                                  #DWLS does not allow missings
+```
+
+```{r}
+#model_hands <- 'hands =~   ffbh3 + ffbh1 + ffbh4' 
+#fit_hands <- cfa(model_hands, data = hands_cfa_data, ordered = c("ffbh3","ffbh1","ffbh4"))
+#summary(fit_hands,standardized = TRUE)
+```
+
+```{r}
+#hands_scores <- lavPredict(fit_hands)
+#hands_cfa_data$hands <- as.vector(hands_scores)
+#hands_cfa_data <- hands_cfa_data %>% select(id,hands)
+```
+
+
+```{r}
+physical_cfa_data <- fi_data %>% select(id,fiq_sum,ffbh6,ffbh10,ffbh11,ffbh15,ffbh17) %>% drop_na() #DWLS does not allow missings
+```
+
+```{r}
+model_physical <- 'physical =~   fiq_sum + ffbh6 + ffbh10 + ffbh11 + ffbh15 + ffbh17' 
+fit_physical <- cfa(model_physical, data = physical_cfa_data, ordered = c("ffbh6","ffbh10","ffbh11","ffbh15","ffbh17"))
+summary(fit_physical,standardized = TRUE)
+```
+
+```{r}
+physical_scores <- lavPredict(fit_physical)
+physical_cfa_data$physical <- as.vector(physical_scores)
+physical_cfa_data <- physical_cfa_data %>% select(id,physical)
+```
+
+
+```{r}
+move_cfa_data <- fi_data %>% select(id,ffbh2,ffbh5,ffbh7,ffbh8,ffbh9,ffbh12,ffbh13,ffbh14,ffbh16,ffbh18) %>% drop_na() %>% 
+                             mutate(move = (ffbh2 + ffbh5 + ffbh7 + ffbh8 + ffbh9 + ffbh12 +ffbh13 + ffbh14 + ffbh16 + ffbh18)) %>% select(id,move)
+```
+
+
+```{r}
+items_include_3c <- c("depressed","anxious","sleep_quality","self_e","hands","physical","move","pain_sev",
+                      "pain_symptoms","fatigue")
+```
+
+
+```{r}
+data_final <- merge(data_nwa,gastro_data, by = "id", all = TRUE)
+data_final <- merge(data_final,dep_cfa_data, by = "id", all = TRUE)
+data_final <- merge(data_final,anxious_cfa_data, by = "id", all = TRUE)
+data_final <- merge(data_final,sleep_quality_cfa_data, by = "id", all = TRUE)
+data_final <- merge(data_final,ases_cfa_data, by = "id", all = TRUE)
+data_final <- merge(data_final,hands_cfa_data, by = "id", all = TRUE)
+data_final <- merge(data_final,physical_cfa_data, by = "id", all = TRUE)
+data_final <- merge(data_final,move_cfa_data, by = "id", all = TRUE)
+data_final <- merge(data_final,pain_data, by = "id", all = TRUE)
+data_final <- merge(data_final,fatigue_cfa_data, by = "id", all = TRUE)
+```
+
+
+```{r}
+#save(data_final, file = "data_final1105.Rda")
+load("data_final1105.Rda")
+```
+
+
+```{r}
+vars_final <- c(items_include_1c,items_include_2c,items_include_3c)
+#save(vars_final, file = "vars_final1105.Rda")
+#load("vars_final1105.Rda")
+```
+
+```{r}
+data_uva <- data_final %>% select(all_of(vars_final)) %>% drop_na()
+```
+
+
+```{r}
+data_cor <- cor(data_uva, method = "spearman")
+```
+
+```{r}
+UVA(data_cor, n = 3059)
+```
+
+```{r}
+cor(data_uva$anxious,data_uva$phq3a)
+```
+
+```{r}
+goldbricker(data_uva, corMin = .5)
+```
+
+
+
+```{r}
+uva_t <- UVA(data_cor, n = 3059)
+uva_t2 <- uva_t$wto$pairwise
+uva_t2 <- uva_t2 %>% filter(wto >= .25)
+
+uva_t2$node_i <- car::recode(uva_t2$node_i, "'fiq8' = 'Stiffness';
+                                             'pain_sev' = 'Pain Severity';
+                                             'physical' = 'Physical Ability';
+                                             'hands' = 'Hands functioning';
+                                             'move' = 'Ability to move';
+                                             'phq3a' = 'Panic Attacks';
+                                             'phq1j' = 'Heart Racing';
+                                             'phq1k' = 'Short Breath';
+                                             'anxious' = 'Anxious'")
+
+
+uva_t2$node_j <- car::recode(uva_t2$node_j, "'fiq8' = 'Stiffness';
+                                             'pain_sev' = 'Pain Severity';
+                                             'physical' = 'Physical Ability';
+                                             'hands' = 'Hands functioning';
+                                             'move' = 'Ability to move';
+                                             'phq3a' = 'Panic Attacks';
+                                             'phq1j' = 'Heart Racing';
+                                             'phq1k' = 'Short Breath';
+                                             'anxious' = 'Anxious'")
+```
+
+```{r}
+library(rempsyc)
+```
+
+```{r}
+wto_table <- nice_table(uva_t2, title = "Table SX", note = c("Result of the unique variable analysis for node pairs with Wto scores >= .25"))
+```
+
+```{r}
+print(wto_table, preview = "docx")
+```
+
+
+```{r}
+#library("writexl")
+#write_xlsx(uva_t2, "wto_scores0505.xlsx")
+```
+
+Functional impairment
+```{r}
+imp_new <- data_final %>% select(id,fiq1a:fiq1j,ffbh1:ffbh18) %>% filter(
+                                                     fiq1a < 4 | is.na(fiq1a),
+                                                     fiq1b < 4 | is.na(fiq1b),
+                                                     fiq1c < 4 | is.na(fiq1c),
+                                                     fiq1d < 4 | is.na(fiq1d),
+                                                     fiq1e < 4 | is.na(fiq1e),
+                                                     fiq1f < 4 | is.na(fiq1f),
+                                                     fiq1g < 4 | is.na(fiq1g),
+                                                     fiq1h < 4 | is.na(fiq1h),
+                                                     fiq1i < 4 | is.na(fiq1i),
+                                                     fiq1j < 4 | is.na(fiq1j))
+
+imp_new$fiq_mean <- rowMeans(imp_new[,2:11],na.rm = TRUE)
+imp_new <- imp_new %>% select(id,fiq_mean,ffbh1:ffbh18) %>% drop_na()
+```
+
+```{r}
+# Set phq2c first because it has the best phrasing
+model_physical_imp <- 'hands =~   ffbh3 + ffbh1 + ffbh4
+                       move =~   ffbh2 + ffbh5 + ffbh7 + ffbh8 + ffbh9 + ffbh12 + ffbh13 + ffbh14 + ffbh16 +ffbh18
+                       physical =~   fiq_mean + ffbh6 + ffbh10 + ffbh11 + ffbh15 + ffbh17
+                       physical_imp =~ physical + move + hands' 
+fit_physical_imp <- cfa(model_physical_imp, data = imp_new, ordered = c("ffbh1","ffbh2","ffbh3","ffbh4","ffbh5","ffbh6",
+                                                                 "ffbh7","ffbh8","ffbh9","ffbh10","ffbh11","ffbh12",                                                                 "ffbh13","ffbh14","ffbh15","ffbh16","ffbh17","ffbh18"))
+summary(fit_physical_imp,standardized = TRUE)
+```
+
+```{r}
+physical_imp_scores <- lavPredict(fit_physical_imp)
+imp_new$physical_imp <- as.vector(physical_imp_scores[,4,drop = TRUE])
+imp_new <- imp_new %>% select(id,physical_imp)
+```
+
+```{r}
+data_final2 <- merge(data_final,imp_new, by = "id", all = TRUE)
+```
+
+
+
+```{r}
+vars_final2 <- c(vars_final,"physical_imp")
+vars_exclude <- c(which(vars_final2 == "fiq8"),
+which(vars_final2 == "hands"),
+which(vars_final2 == "move"),
+which(vars_final2 == "physical"))
+vars_final2 <- vars_final2[-c(vars_exclude)]
+```
+
+
+
+
+```{r}
+save(data_final2, file = "data_final2_100924.Rda")
+
+```
+
+
+```{r}
+#vars_final <- c(items_include_1c,items_include_2c,items_include_3c)
+save(vars_final2, file = "vars_final2_100924.Rda")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

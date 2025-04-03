@@ -1,0 +1,749 @@
+---
+title: "Cross Sectional Network Analysis"
+author: "JR"
+date: "03.04.25"
+output: html_document
+---
+
+
+
+Load packages
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(readxl)
+library(ggplot2)
+library(networktools)
+library(car)
+library(NetworkComparisonTest)
+library(igraph)
+library(qgraph)
+library(bootnet)
+library(mgm)
+library(EGAnet)
+library(huge)
+library(rempsyc)
+library(viridis)
+library(colorspace)
+library(flextable)
+library(officer)
+```
+
+Load data and variable names
+```{r}
+load("data_final2_100924.Rda")
+load("vars_final2_100924.Rda")
+```
+
+
+Create df for nw.
+```{r}
+data_nw <- data_final2 %>% select(all_of(vars_final2)) %>% drop_na() 
+```
+
+
+Rename variables
+```{r}
+data_nw <- data_nw %>% dplyr::rename(
+"Perceived.Health" = sf1,
+"Pain.Impact" = sf8, 
+"Social.Impact" = sf12,
+"Dizziness" = phq1h,
+"Fainting" = phq1i,
+"Anhedonia" = phq2a,
+"Appetite.Dysregulation" = phq2e,
+"Self.Worth.Issues" = phq2f,
+"Psychomotor.Changes" = phq2h,
+"Suicidal.Ideation" = phq2i,
+"Health.concerns" = phq12a, 
+"Libido.Loss"= phq12c,
+"Trauma.Memories" = phq12j,
+"Panic.Attacks" =  phq3a,
+"Concentration.Deficits" = phq2g,
+"Reduced.Talking" =  ads10,
+"Loneliness" =  ads11,
+"Perceived.Social.Rejection" =  ads14,
+"Loss.of.drive"= ads15,
+"Heart.Palpitations" = phq1j,
+"Shortness.Of.Breath" = phq1k,
+"Self.Efficacy" = self_e,
+"Daily.Living.Skills" = physical_imp,
+"Pain.Distribution" = pain_symptoms,
+"Pain.Severity" = pain_sev,
+"Gastrointestinal.Discomfort" = gastro,
+"Sleeping.Problems" = sleep_quality,
+"Fatigue" = fatigue,
+"Anxiety/Nervousness" = anxious,
+"Depressed.mood" = depressed)
+```
+
+
+All variables that need bo be binarized
+```{r}
+vars_dich <- c("Dizziness","Fainting","Heart.Palpitations","Shortness.Of.Breath","Anhedonia","Appetite.Dysregulation","Self.Worth.Issues","Concentration.Deficits",
+               "Psychomotor.Changes","Suicidal.Ideation","Health.concerns","Libido.Loss","Trauma.Memories","Reduced.Talking","Loneliness",
+               "Perceived.Social.Rejection","Loss.of.drive","Panic.Attacks")
+```
+
+Statistics
+```{r}
+statistics <- list(Mean = ~round(mean(.x),2), SD = ~round(sd(.x),2), Min = ~round(min(.x),2), Max = ~round(max(.x),2))
+```
+
+Get stats table
+```{r}
+desc <- data_nw  %>% summarise_all(statistics) %>% 
+                         pivot_longer(cols = everything(), names_to = c("node", ".value"), names_sep = "_")
+```
+
+
+Binarzize chosen variables
+```{r}
+data_nw <- data_nw %>%  mutate(Dizziness = ifelse(Dizziness > 0, 1, 0),
+                               Fainting = ifelse(Fainting > 0, 1, 0),
+                               Heart.Palpitations = ifelse(Heart.Palpitations > 0, 1, 0),
+                               Shortness.Of.Breath = ifelse(Shortness.Of.Breath > 0, 1, 0),
+                               Anhedonia = ifelse(Anhedonia > 1, 1, 0),
+                               Appetite.Dysregulation = ifelse(Appetite.Dysregulation > 1, 1, 0),
+                               Self.Worth.Issues = ifelse(Self.Worth.Issues > 1, 1, 0),
+                               Concentration.Deficits = ifelse(Concentration.Deficits > 1, 1, 0),
+                               Psychomotor.Changes = ifelse(Psychomotor.Changes > 1, 1, 0),
+                               Suicidal.Ideation = ifelse(Suicidal.Ideation > 1, 1, 0),
+                               Health.concerns = ifelse(Health.concerns > 0, 1, 0),
+                               Libido.Loss = ifelse(Libido.Loss > 0, 1, 0),
+                               Trauma.Memories = ifelse(Trauma.Memories > 0, 1, 0),
+                              # ads5 = ifelse(ads5 > 1, 1, 0),
+                               Reduced.Talking = ifelse(Reduced.Talking > 1, 1, 0),
+                               Loneliness = ifelse(Loneliness > 1, 1, 0),
+                               Perceived.Social.Rejection = ifelse(Perceived.Social.Rejection > 1, 1, 0),
+                               Loss.of.drive = ifelse(Loss.of.drive > 1, 1, 0))
+```
+
+
+Get stats for binarized variables
+```{r}
+desc_dich <- data_nw %>% select((all_of(vars_dich))) %>% summarise_all(~sum(.x)) %>% 
+                         pivot_longer(cols = everything(), names_to = c("node"), values_to = "Present") #%>% 
+                       #  mutate(present = paste0(present,"/",nrow(data_nw)))
+```
+
+Add information how many items were used to create the variable
+```{r}
+comb_info <- data.frame(
+  Node = c("Daily.Living.Skills","Fatigue","Sleeping.Problems","Anxiety/Nervousness","Depressed.mood","Self.Efficacy","Pain.Distribution","Gastrointestinal.Discomfort"), 
+                    #    Combination.method = c("CFA","CFA","CFA","CFA","CFA","Mean","Sum Score","Sum Score"),
+                        Number.of.items = c(19,4,3,4,7,8,5,2))
+colnames(comb_info) <- gsub(pattern = '.', replacement = " ",colnames(comb_info),fixed = TRUE)
+comb_info$Node <- gsub(pattern = '.', replacement = " ",comb_info$Node,fixed = TRUE)
+```
+
+Combine to descr table
+```{r}
+desc_combined <- merge(desc,desc_dich, by = "node",all = TRUE)
+desc_combined[is.na(desc_combined)] <- ""
+desc_combined$Phrasing <- ""
+#desc_combined$'Combination method' <- ""
+#desc_combined$'Number of items' <- ""
+
+colnames(desc_combined)[1] <- "Node"
+desc_combined$Node <- gsub(pattern = '.', replacement = " ",desc_combined$Node,fixed = TRUE)
+desc_combined <- merge(desc_combined,comb_info, by = "Node",all = TRUE)
+desc_combined <- desc_combined %>% select(1,7,8,everything())
+desc_combined$`Number of items`[is.na(desc_combined$`Number of items`)] <- 1
+desc_combined[is.na(desc_combined)] <- ""
+
+```
+
+
+
+Check how many NA waves are in the data and create table
+```{r}
+apa_tab <- nice_table(desc_combined,
+           title = c("Descriptive statistic of the nodes"),
+  note = "'Mean' = mean, 'SD' = standard deviation, 'Min' = minimum, 'Max' = maximum. 'Combination method' = The combination method (mean, sum score or conformatory factor analysis (CFA)) if multiple items were combined into one node. 'Number of items' = The number of combined items. 'Phrasing' = The phrasing of nodes represented by a single item. 'Present' = Number of patients in which the symptom was present if the item was binarized prior to the analysis (n = 3044)"
+)
+apa_tab
+#print(apa_tab, preview = "docx")
+```
+
+Compare npn transformed nw with untransformed nw
+```{r}
+#nw_no_t <- estimateNetwork(data_nw,default = "mgm")
+#plot(nw_no_t)
+
+#vars_transform <- c("Perceived.Health", "Pain.Impact","Social.Impact","Gastrointestinal.Discomfort","Depressed.mood",
+#                    "Anxiety/Nervousness","Sleeping.Problems","Self.Efficacy","Pain.Severity","Pain.Distribution","Daily.Living.Skills","Fatigue")
+
+#data_nw_t <- data_nw
+
+#for (var_name in vars_transform) {
+#  
+#  test_var <- data_nw_t[,var_name, drop = TRUE]
+#  shapiro_test <- shapiro.test(test_var)
+#  if (shapiro_test$p.value < 0.05){
+#   data_nw_t[,var_name] <- as.vector(huge.npn(data_nw_t[,var_name, drop = FALSE]))
+#  }}
+
+#nw_t <- estimateNetwork(data_nw_t,default = "mgm")
+#plot(nw_t)
+
+#set.seed(777)
+#nct_t_result <- NCT(nw_t,nw_no_t,
+#                    it = 1000, 
+#                    paired = TRUE,
+#                    test.edges = FALSE,
+#                    test.centrality = TRUE,
+#                    abs = FALSE,
+#                    centrality = c("strength", "expectedInfluence"))
+#save(nct_t_result, file = "nct_t_result_100924.Rda")
+
+load("nct_t_result_100924_nw_vs_nwt.Rda")
+```
+
+
+
+
+Compare diagnosis at prior and after 2010
+```{r}
+#data_nwa_og <- read_excel("data_nwa.xlsx")
+#data_nwa_demo <- data_nwa_og %>% select(id,geschl,age,year_visit)
+#data_demo2 <- merge(data_final2,data_nwa_demo, by = "id", all = TRUE) 
+#data_demo2 <- data_demo2 %>% select(all_of(vars_final2),year_visit,geschl,age) %>% drop_na()
+#data_pre2010 <- data_demo2 %>% filter(as.numeric(year_visit) <= 2010) %>% select(-year_visit) 
+#data_post2010 <- data_demo2 %>% filter(as.numeric(year_visit) > 2010) %>% select(-year_visit) 
+#table(data_pre2010$geschl)
+#summary(data_pre2010$age)
+#sd(data_pre2010$age)
+#table(data_post2010$geschl)
+#summary(data_post2010$age)
+#sd(data_post2010$age)
+#nw_pre2010 <- estimateNetwork(data_pre2010,default = "mgm")
+#nw_post2010 <- estimateNetwork(data_post2010,default = "mgm")
+#set.seed(777)
+#nct_2010_result <- NCT(nw_pre2010,nw_post2010,
+#                    it = 1000, 
+#                    paired = FALSE,
+#                    test.edges = FALSE,
+#                    test.centrality = TRUE,
+#                    abs = FALSE,
+#                    centrality = c("strength", "expectedInfluence"))
+#save(nct_2010_result, file = "nct_2010_result_100924.Rda")
+load("nct_2010_result_100924.Rda")
+summary(nct_t_result)
+```
+
+
+# not necessary but for a more easy phrasing
+```{r}
+nw <- estimateNetwork(data_nw,default = "mgm")
+plot(nw)
+```
+
+```{r}
+summary(nw)
+```
+
+
+```{r}
+any(nw$graph < 0)
+```
+No negative edges
+
+
+```{r}
+com_mgm <- EGAnet::community.detection(nw$graph,algorithm = "walktrap", allow.singleton = TRUE)
+coms <- as.data.frame(com_mgm)
+coms$name <- colnames(data_nw)
+coms
+EGAnet::community.detection(nw$graph,algorithm = "walktrap", allow.singleton = TRUE)
+```
+
+Set color for the communities
+```{r}
+coms$color <- car::recode(coms$x,
+"1 = '#F0F921FF';
+2 = '#5D01A6FF';
+3 = '#9C179EFF';
+4 = '#CC4678FF';
+5 = '#ED7953FF';
+6 = '#FDB32FFF';
+7 = '#0D0887FF'") 
+```
+
+
+```{r}
+oc1 <- "#F0F921FF"
+oc2 <-  '#5D01A6FF'
+oc3 <- '#9C179EFF'
+oc4 <- '#CC4678FF'
+oc5 <- '#ED7953FF'
+oc6 <- '#FDB32FFF'
+oc7 <- '#0D0887FF'
+```
+
+
+Estimate prdictability
+```{r}
+nw_predict <- mgm(as.matrix(data_nw),
+           type = nw$results$call$type, 
+           level = nw$results$call$level, 
+           lambdaSel = "EBIC",
+           binarySign = TRUE
+           )
+```
+
+```{r}
+pre_mgm <- predict(nw_predict, data = as.matrix(data_nw), errorCon = c("R2"), errorCat = c("CC", "nCC", "CCmarg"))
+```
+
+
+```{r}
+error_list <- list()
+for(i in 1:30){
+if(is.na(pre_mgm$errors[i,2])){
+   error_list[[i]] <- c(pre_mgm$errors[i,5],(pre_mgm$errors[i,3] - pre_mgm$errors[i,5]))
+}  
+else
+{error_list[[i]] <- pre_mgm$errors[i,2]}}
+```
+
+Color predictablity
+```{r}
+color_list <- list() # List for Colors
+for(i in 1:30){ 
+if(is.na(pre_mgm$errors[i,2])){
+  if(coms[i,1] == 1){color_list[[i]] <- c(lighten(oc1,space = "combined",amount = 0.3),darken(oc1,space = "HCL",amount = 0.2))}
+  if(coms[i,1] == 2){color_list[[i]] <- c(lighten(oc2,space = "combined",amount = 0.3),darken(oc2,space = "HCL",amount = 0.2))}
+  if(coms[i,1] == 3){color_list[[i]] <- c(lighten(oc3,space = "combined",amount = 0.3),darken(oc3,space = "HCL",amount = 0.2))}
+  if(coms[i,1] == 4){color_list[[i]] <- c(lighten(oc4,space = "combined",amount = 0.3),darken(oc4,space = "HCL",amount = 0.2))}
+  if(coms[i,1] == 5){color_list[[i]] <- c(lighten(oc5,space = "combined",amount = 0.3),darken(oc5,space = "HCL",amount = 0.2))}
+  if(coms[i,1] == 6){color_list[[i]] <- c(lighten(oc6,space = "combined",amount = 0.3),darken(oc6,space = "HCL",amount = 0.2))}
+if(coms[i,1] == 7){color_list[[i]] <- c(lighten(oc7,space = "combined",amount = 0.3),darken(oc7,space = "HCL",amount = 0.2))}}
+if(!is.na(pre_mgm$errors[i,2])){
+  if(coms[i,1] == 1){color_list[[i]] <- darken(oc1,space = "HCL",amount = 0.2)}
+  if(coms[i,1] == 2){color_list[[i]] <- darken(oc2,space = "HCL",amount = 0.2)}
+  if(coms[i,1] == 3){color_list[[i]] <- darken(oc3,space = "HCL",amount = 0.2)}
+  if(coms[i,1] == 4){color_list[[i]] <- darken(oc4,space = "HCL",amount = 0.2)}
+  if(coms[i,1] == 5){color_list[[i]] <- darken(oc5,space = "HCL",amount = 0.2)}
+  if(coms[i,1] == 6){color_list[[i]] <- darken(oc6,space = "HCL",amount = 0.2)}
+  if(coms[i,1] == 7){color_list[[i]] <- darken(oc7,space = "HCL",amount = 0.2)}}  
+}
+```
+
+
+
+```{r}
+#pdf(file = "nw_plasma2.pdf")
+nw_plot <- plot(nw, color = coms$color,pie = error_list,
+pieColor = color_list, labels = "")
+#dev.off()
+```
+
+
+Get adj matrix for supplements
+```{r}
+g_table <- as.data.frame(nw$graph)
+g_table  <- g_table  %>% mutate_if(is.numeric, round, digits = 2)
+g_table[g_table == 0] <- ""
+g_table[upper.tri(g_table)] <- ""
+g_table <- data.frame(Node = 1:30, g_table)
+colnames(g_table) <- colnames(data_nw)
+rownames(g_table) <- colnames(data_nw)
+```
+
+
+
+
+
+```{r}
+#ft <- flextable(g_table)
+#ft <- autofit(ft)                  
+#ft <- set_table_properties(ft, layout = "autofit")  
+#ft <- fontsize(ft, size = 6)
+#doc <- read_docx() %>%             
+# body_add_flextable(ft) %>%       
+#  body_add_par("")                 
+
+
+#doc <- read_docx() %>%
+# body_add_flextable(ft) %>%
+# body_end_section_landscape()
+
+#print(doc, target = "output8.docx") # Save the Word document
+```
+
+ N1: "Perceived.Health";N2: "Social.Impact";              
+ N3: "Dizziness";            N4:       "Fainting";                   
+ N5: "Heart.Palpitations";   N6:       "Shortness.Of.Breath";        
+ N7 "Anhedonia";            N8:       "Appetite.Dysregulation";     
+ N9 "Psychomotor.Changes";  N10:       "Suicidal.Ideation";          
+N11 "Panic.Attacks";        N12:       "Health.concerns";            
+N13 "Trauma.Memories";      N14:       "Reduced.Talking";            
+N15 "Perceived.Social.Rejection"; N16:  "Loss.of.drive";              
+N17 "Pain.Impact";          N18:       "Libido.Loss";                
+N19 "Loneliness";           N20:       "Self.Worth.Issues";          
+N21 "Concentration.Deficits";  N22:    "Gastrointestinal.Discomfort";
+N23 "Depressed.mood";       N24:       "Anxiety/Nervousness";        
+N25 "Sleeping.Problems";    N26:       "Self.Efficacy";              
+N27 "Pain.Severity";        N28:       "Pain.Distribution";          
+N29 "Fatigue";              N30:       "Daily.Living.Skills" 
+
+
+
+
+```{r}
+nw_matrix <- nw$graph
+colnames(nw_matrix) <- colnames(data_nw)
+rownames(nw_matrix) <- colnames(data_nw)
+nw_matrix
+nw_matrix_only_pain <- as.data.frame(nw_matrix) %>% select(Pain.Severity) %>% filter(Pain.Severity != 0)
+```
+
+Export adj matrix
+```{r}
+network_df <- as.data.frame(nw$graph)
+colnames(network_df) <- colnames(data_nw)
+
+network_df2 <- network_df %>% mutate(aa = colnames(data_nw))
+network_df2 <- network_df2 %>% select(aa, all_of(colnames(network_df2)))
+colnames(network_df2)[1] <- "Node"
+
+
+network_table <- nice_table(network_df2)
+network_table
+#print(network_table, preview = "docx")
+```
+
+
+
+Bootstrapping
+Case
+```{r}
+#set.seed(777)
+#boot_case <- bootnet(nw, nBoots = 5000,  type = "case", nCores = 7, 
+#statistics = c("edge", "strength", "closeness", "betweenness", #"expectedInfluence","bridgeStrength","bridgeCloseness","bridgeBetweenness","bridgeExpectedInfluence"),
+#communities = coms$x,
+#useCommunities = "all")
+#save(boot_case, file = "boot_case100924.Rda")
+```
+
+Nonparametric
+```{r}
+#set.seed(777)
+#boot_np <- bootnet(nw, nBoots = 5000,  type = "nonparametric", nCores = 7, 
+#statistics = c("edge", "strength", "expectedInfluence","bridgeStrength","bridgeCloseness","bridgeBetweenness","bridgeExpectedInfluence"),
+#communities = coms$x,
+#useCommunities = "all")
+#save(boot_np, file = "boot_np100924.Rda")
+```
+
+
+```{r}
+load("boot_np100924.Rda")
+load("boot_case100924.Rda")
+```
+
+```{r}
+corStability(boot_case)
+```
+Edge weight np
+```{r}
+#pdf(file = "boot_edges_nz_101024.pdf", width = 7,height = 60)
+#plot(boot_np, labels = TRUE,order = "sample")
+#dev.off()
+
+
+#pdf(file = "boot_edges_010425.pdf", width = 7,height = 10)
+#plot(boot_np, labels = FALSE,order = "sample")
+#dev.off()
+```
+
+```{r}
+#pdf(file = "strength_closeness_betweenness270225.pdf")
+centralityPlot(nw, include = c("Strength","Closeness","Betweenness"), scale = "z-scores",orderBy = "default", decreasing = TRUE)
+#dev.off()
+```
+
+z-scores
+```{r}
+ct_raw <- centralityTable(nw, standardized = FALSE)
+ct_raw <- ct_raw %>% filter(measure == "Strength") %>% select(3,5) %>% rename(raw = value)
+ct_raw$node <- colnames(data_nw)
+
+ct_z <- centralityTable(nw, standardized = TRUE)
+ct_z <- ct_z %>% filter(measure == "Strength") %>% select(3,5) %>% rename(z_score = value)
+ct_z$node <- colnames(data_nw)
+
+ct_man <- merge(ct_raw,ct_z, by = "node", all = TRUE)
+
+```
+
+
+
+```{r}
+bridge <- networktools::bridge(nw$graph,communities = coms$x, normalize = FALSE)
+names(bridge$`Bridge Strength`) <- colnames(data_nw)
+```
+
+
+```{r}
+bridge_ct <- data.frame(node = colnames(data_nw),
+                        raw = bridge$`Bridge Strength`
+                        )
+
+bridge_ct <- bridge_ct %>% mutate(z_score = (raw - mean(bridge_ct$raw)) / sd(raw))
+```
+
+
+```{r}
+bridge$communities
+all(coms$x == bridge$communities)
+```
+
+
+```{r}
+#pdf(file = "bridge_plot270225.pdf")
+bridge_plot <- plot(bridge,
+order = "value",
+zscore = TRUE,
+color = FALSE,
+#colpalette = "Set2",
+plotNA = FALSE,
+include = "Bridge Strength"
+)
+bridge_plot
+#dev.off()
+```
+
+```{r}
+#pdf(file = "bridge_plot270225.pdf")
+#plot(bridge,
+#order = "value",
+#zscore = TRUE,
+#color = FALSE,
+#colpalette = "Set2",
+#plotNA = FALSE,
+#include = "Bridge Strength"
+#)
+
+#dev.off()
+```
+
+```{r}
+b_zscores <- bridge$`Bridge Strength`
+b_zscores <- (b_zscores- mean(b_zscores))/sd(b_zscores)
+```
+
+
+
+```{r}
+#pdf(file = "bridge_closeness_betweenness270225.pdf")
+plot(bridge,
+#order = "value",
+zscore = TRUE,
+color = FALSE,
+#colpalette = "Set2",
+plotNA = FALSE,
+include = c("Bridge Betweenness", "Bridge Closeness")
+)
+
+#dev.off()
+```
+
+
+
+```{r}
+plot(boot_np,"BridgeStrength",plot = "difference",order = "mean")
+```
+
+
+Bridge edges for communities
+```{r}
+adj_matrix <- nw$graph
+communities <- coms$x
+
+all_coms <- c(1:7)
+com_combination  <- as.data.frame(t(combn(all_coms,m = 2,simplify = TRUE)))
+el <- rep("",30)
+```
+
+Create a bridge matrix
+```{r}
+
+adj_matrix_bridge <- adj_matrix  
+for (i in 1:nrow(adj_matrix)) {
+  for (j in 1:ncol(adj_matrix)) {
+  #  browser()
+    if (communities[i] == communities[j]) {  
+ #    browser()
+       adj_matrix_bridge[i, j] <- 0  # Set edge to 0 if nodes belong to the same community
+ #      browser()
+    }
+  }
+}
+```
+
+```{r}
+#pdf(file = "bridges_nw_no_labels.pdf", width = 12, height = 9)
+qgraph(adj_matrix_bridge, color = coms$color,pie = error_list,
+pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = colnames(data_nw), minimum = 0) #maximum = max(adj_matrix)
+#dev.off()
+```
+
+
+
+```{r}
+#   pdf(file = "pain_com_bridge_figure270225.pdf", width = 12, height = 9)
+#    qgraph(pain_matrix, color = coms$color,pie = error_list,
+#    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,maximum = max(adj_matrix), directed = FALSE) #
+#    dev.off()
+```
+
+
+
+
+
+
+Create a bridge matrix for each combination of communities. Only creates "half" of a matrix.So directed has to be FALSE. 
+```{r}
+create_adj_matrix <- function(adj_matrix, communities, community1, community2) {
+  new_adj_matrix <- adj_matrix  
+  for (i in 1:nrow(adj_matrix)) {
+    for (j in 1:ncol(adj_matrix)) {
+      if (communities[i] != community1 | communities[j] != community2) {  
+        new_adj_matrix[i, j] <- 0  
+      }
+    }
+  }
+  return(new_adj_matrix)
+}
+```
+
+```{r}
+   # Initialize a list to store the adjacency matrices
+adj_matrices <- list()
+
+  # Iterate over each pair of communities and create adjacency matrix
+for (i in 1:nrow(com_combination)){
+    # Create adjacency matrix for current pair of communities
+    community1 <- com_combination[i,1]
+    community2 <- com_combination[i,2] 
+    
+    current_adj_matrix <- create_adj_matrix(adj_matrix, communities, community1, community2)
+    
+    # Store the adjacency matrix in the list
+    adj_matrices[[length(adj_matrices) + 1]] <- current_adj_matrix
+  
+ 
+    }
+
+
+```
+
+
+
+Create a matrix only conataining bridge edges for the Pain Severity and Impact community
+```{r}
+pain_matrix <- adj_matrices[[1]] + adj_matrices[[2]] + adj_matrices[[3]] + adj_matrices[[4]] + adj_matrices[[5]] + adj_matrices[[6]]
+pain_b <- as.vector(pain_matrix)
+pain_b <- pain_b[pain_b != 0]
+qgraph(pain_matrix, color = coms$color,pie = error_list,
+    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,directed = FALSE)
+```
+
+```{r}
+length(pain_b)
+length(pain_b)/(26*4)
+```
+
+
+```{r}
+sleep_matrix <- adj_matrices[[1]] + adj_matrices[[7]] + adj_matrices[[8]] + adj_matrices[[9]] + adj_matrices[[10]] + adj_matrices[[11]]
+sleep_b <- as.vector(sleep_matrix)
+sleep_b <- sleep_b[sleep_b != 0]
+qgraph(sleep_matrix, color = coms$color,pie = error_list,
+    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,directed = FALSE)
+```
+
+```{r}
+length(sleep_b)
+length(sleep_b)/(26*4)
+```
+
+```{r}
+somatic_matrix <- adj_matrices[[2]] + adj_matrices[[7]] + adj_matrices[[12]] + adj_matrices[[13]] + adj_matrices[[14]] + adj_matrices[[15]] 
+somatic_b <- as.vector(somatic_matrix)
+somatic_b <- somatic_b[somatic_b != 0]
+qgraph(somatic_matrix, color = coms$color,pie = error_list,
+    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,directed = FALSE)
+```
+
+```{r}
+length(somatic_b)
+length(somatic_b)/(24*6)
+```
+
+```{r}
+mood_matrix <- adj_matrices[[3]] + adj_matrices[[8]] + adj_matrices[[12]] + adj_matrices[[16]] + adj_matrices[[17]] + adj_matrices[[18]] 
+mood_b <- as.vector(mood_matrix)
+mood_b <- mood_b[mood_b != 0]
+qgraph(mood_matrix, color = coms$color,pie = error_list,
+    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,directed = FALSE)
+```
+
+```{r}
+length(mood_b)
+length(mood_b)/(24*6)
+```
+```{r}
+cognitive_matrix <- adj_matrices[[4]] + adj_matrices[[9]] + adj_matrices[[13]] + adj_matrices[[16]] + adj_matrices[[19]] + adj_matrices[[20]] 
+cognitive_b <- as.vector(cognitive_matrix)
+cognitive_b <- cognitive_b[cognitive_b != 0]
+qgraph(cognitive_matrix, color = coms$color,pie = error_list,
+    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,directed = FALSE)
+```
+
+```{r}
+length(cognitive_b)
+length(cognitive_b)/(25*5)
+```
+
+```{r}
+anxiety_matrix <- adj_matrices[[5]] + adj_matrices[[10]] + adj_matrices[[14]] + adj_matrices[[17]] + adj_matrices[[19]] + adj_matrices[[21]] 
+anxiety_b <- as.vector(anxiety_matrix)
+anxiety_b <- anxiety_b[anxiety_b != 0]
+qgraph(anxiety_matrix, color = coms$color,pie = error_list,
+    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,directed = FALSE)
+```
+
+```{r}
+length(anxiety_b)
+length(anxiety_b)/(27*3)
+```
+
+```{r}
+sex_health_matrix <- adj_matrices[[6]] + adj_matrices[[11]] + adj_matrices[[15]] + adj_matrices[[18]] + adj_matrices[[20]] + adj_matrices[[21]] 
+sex_health_b <- as.vector(sex_health_matrix)
+sex_health_b <-sex_health_b[sex_health_b != 0]
+qgraph(sex_health_matrix, color = coms$color,pie = error_list,
+    pieColor = color_list, layout = nw_plot$layout,edge.color = "blue",labels = el,directed = FALSE)
+```
+
+
+
+```{r}
+length(sex_health_b)
+length(sex_health_b)/(28*2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
