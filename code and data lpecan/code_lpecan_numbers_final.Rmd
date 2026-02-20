@@ -1,0 +1,94 @@
+---
+title: "lpc"
+author: "JR"
+date: "2026-01-04"
+output: html_document
+---
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+library(visNetwork)
+library(readxl)
+library(dplyr)
+library(janitor)
+library(tidyr)
+library(car)
+library(PECAN2)
+library(psych)
+library(ggplot2)
+library(stringr)
+library(jaccard)
+library(webshot)
+library(htmlwidgets)
+library(chromote)
+library(readr)
+```
+```{r}
+set.seed(777)
+```
+
+
+```{r}
+data <- readRDS(file = 'lpecan_results.Rda')
+```
+
+
+Boot.vec.effect stores the mean correlation between agg. networks for 2days (4 total nw) 3days (6 total nw) 4days ...
+```{r}
+for (i in c("101","102","103","104","105","106","107","108")) {
+
+print(i)
+print("Mean effect")  
+print(data$boot_results[[i]]$boot.vec.effect)
+print("Lower effect")
+print(data$boot_results[[i]]$lower.effect)
+print("Upper effect")
+print(data$boot_results[[i]]$upper.effect)
+
+}
+```
+
+Number of NA or zero values for the phi coefficient
+```{r}
+for (i in c("101","102","103","104","105","106","107","108")) {
+print(paste0("   ",i," Number of NA Values"))
+
+print(sum(is.na(data$drift_results[[i]]$correlation)))
+print(paste0("   ",i," Number of Zeros"))
+print(sum(data$drift_results[[i]]$correlation == 0,na.rm = TRUE))
+}
+```
+
+
+
+Number of NA or zero values for the jaccard index
+```{r}
+for (i in c("101","102","103","104","105","106","107","108")) {
+print(paste0("   ",i," Number of NA Values"))
+
+print(sum(is.na(data$drift_results_j[[i]]$correlation)))
+print(paste0("   ",i," Number of Zeros"))
+print(sum(data$drift_results_j[[i]]$correlation == 0,na.rm = TRUE))
+}
+```
+Slope results phi
+```{r}
+for (i in c("101","102","103","104","105","106","107","108")) {
+print(paste0("   ",i))
+
+print(data$slope_results[[i]])
+}
+```
+Slope results jaccard index
+```{r}
+for (i in c("101","102","103","104","105","106","107","108")) {
+print(paste0("   ",i))
+
+print(data$slope_results_j[[i]])
+}
+```
+
+
+

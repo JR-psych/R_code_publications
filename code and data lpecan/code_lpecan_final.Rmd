@@ -1,0 +1,837 @@
+---
+title: "lpc"
+author: "JR"
+date: "2023-12-13"
+output: html_document
+---
+
+
+
+
+```{r message=FALSE, warning=FALSE}
+library(visNetwork)
+library(readxl)
+library(dplyr)
+library(janitor)
+library(tidyr)
+library(car)
+library(PECAN2)
+library(psych)
+library(ggplot2)
+library(stringr)
+library(jaccard)
+library(webshot)
+library(htmlwidgets)
+library(chromote)
+```
+```{r}
+set.seed(777)
+```
+
+Prepare data
+```{r}
+label_list <- list()
+label_list[["101"]] <- c("Frequent awakenings","Irregular meals","Stuck worrying","Stuck screentime","Tired","Physically inactive","Unfocused","High workload",
+                                    "Socially avoidant","Over-involved in family")
+
+label_list[["102"]] <- c("Fell asleep late", "Ate too little","Stuck in thoughts","Stuck screentime",
+                                        "Tired","Physically inactive","Avoided feelings","Alcohol")
+
+label_list[["103"]] <- c("Stuck worrying", "Stuck screentime", "Tired", "Physically inactive",
+                                       "Negative emotions","Socially avoidant","Work was meaningless",
+                                       "Conflicts with the kids","Bad work assignments")
+
+label_list[["104"]] <- c("Procrastinates","Eats too little","Ruminates",
+                                       "Isolates","Tired","Physically inactive","Overwhelmed at work",
+                                       "Obsessive thoughts","Compulsive behaviors")
+
+label_list[["105"]] <- c("Slept badly","Stuck in thoughts","Tired and in pain","Physically inactive",
+                                       "Overwhelmed with emotions","Unfocused","Procrastinates","Work without taking a break",
+                                       "Angry conflicts")
+
+label_list[["106"]] <- c("Anxiety", "Physically inactive","Procrastinates","Self_critical thoughts","Conflicts with son",
+                         "Conflicts with husband", "Tired / pain", "Skips meals", "Flashbacks","Trouble sleeping")
+
+label_list[["107"]] <- c("Negative emotions","Negative thoughts","Anger","Problems at work","Tired / pain",
+                         "Physically inactive", "Eats too little", "Flashbacks","Compulsive behaviors",
+                         "Trouble falling asleep")
+
+label_list[["108"]] <- c("Negative thoughts","Negative emotions","Restless","Financial troubles","Physically inactive",
+                          "Need for control") # "Tired / pain", "Irregular eating", "Flashbacks / nightmares" "Trouble sleeping"
+```
+
+
+```{r}
+data_101 <- janitor::clean_names(read_excel("data_101.xlsx")[-1,])
+data_102 <- janitor::clean_names(read_excel("data_102.xlsx")[-1,])
+data_103 <- janitor::clean_names(read_excel("data_103.xlsx")[-1,])
+data_104 <- janitor::clean_names(read_excel("data_104.xlsx")[-1,])
+data_105 <- janitor::clean_names(read_excel("data_105.xlsx")[-1,])
+
+names_df <- c("data_101","data_102","data_103","data_104","data_105")
+for (i in names_df) {
+  print(identical(colnames(data_101),colnames(get(i))))
+    
+}
+```
+
+
+```{r}
+data_101$id <- "101"
+data_102$id <- "102"
+data_103$id <- "103"
+data_104$id <- "104"
+data_105$id <- "105"
+data_101$day <- 1:nrow(data_101)
+data_102$day <- 1:nrow(data_102)
+data_103$day <- 1:nrow(data_103)
+data_104$day <- 1:nrow(data_104)
+data_105$day <- 1:nrow(data_105)
+```
+
+```{r}
+data_106_108 <- readxl::read_xlsx("data_106-108.xlsx")
+data_106_108 <- janitor::clean_names(data_106_108)
+data_106_108 <- data_106_108 %>% filter(mappit_individualiserad_timestamp != "[not completed]")
+data_106_108$day <- c(1:nrow(data_106_108 %>% filter(id == "106")),1:nrow(data_106_108 %>% filter(id == "107")),1:nrow(data_106_108 %>% filter(id == "108")))
+data <- rbind(data_101,data_102,data_103,data_104,data_105)#, by = colnames(data_101),   all = TRUE)
+```
+
+```{r}
+vars <- c("id","day",colnames(data[,11:130]))
+data <- merge(data,data_106_108, by = vars, all = TRUE) 
+data <- data %>% select(-(start_date:user_language))
+```
+
+Export data for OSF/Github
+```{r}
+#writexl::write_xlsx(data,"lpecan_data.xlsx")
+```
+
+
+Start Analysis based on Burger et al.
+```{r}
+boot_results <- list()
+drift_results <- list()
+slope_results <- list()
+plot_results <- list()
+drift_results_j <- list()
+slope_results_j <- list()
+plot_results_j <- list()
+agg_list <- list()
+ex_list <- list()
+cen_list <- list()
+day_list<- list()
+
+for (i in unique(data$id)) {
+
+data_id <- data %>% filter(id == i)
+data_id <- data_id %>% select(id:p10_99)    
+
+data_id <- data_id %>% rename(q1 = q20,
+                              q2 = q21,
+                              q3 = q22,
+                              q4 = q23,
+                              q5 = q24,
+                              q6 = q25,
+                              q7 = q26,
+                              q8 = q27,
+                              q9 = q28,
+                              q10 = q29) 
+
+n_nodes <- as.numeric(sum(colSums(!is.na(data_id[,3:12])) > 0))   
+  
+  
+first_index  <- as.integer(str_extract(names(data_id), "(?<=p)\\d+")) # digits preceded by p
+second_index <- as.integer(str_extract(names(data_id), "(?<=_)\\d+")) # digits preceded by _
+
+cols_to_drop <- names(data_id)[
+  str_detect(names(data_id), "^p\\d+_\\d+$") & # ^ = start; p = matches p; \\d+ = matches 1 or more digits; _ = matches _; #
+                                               #\\d+ = matches 1 or more digits; $ = end
+    (
+    first_index  > n_nodes |                    
+    second_index > n_nodes |                  # gets also rid of all the 99
+    first_index == second_index               # gets rid of "auto_cor"
+  )
+]
+
+data_id <- data_id %>% select(-all_of(cols_to_drop))
+
+
+nodes_to_drop <- names(data_id[,which(names(data_id) == "q1"):which(names(data_id) =="q10")])[c(all(is.na(data_id$q1)),all(is.na(data_id$q2)),all(is.na(data_id$q3)),all(is.na(data_id$q4)),
+                          all(is.na(data_id$q5)),all(is.na(data_id$q6)),all(is.na(data_id$q7)),all(is.na(data_id$q8)),
+                          all(is.na(data_id$q9)),all(is.na(data_id$q10)))]
+
+
+data_id <- data_id %>% select(-all_of(nodes_to_drop))
+data_id[] <- lapply(data_id, as.numeric)
+
+
+data_id[,3:(2+n_nodes)] <- 1 # nodes just dummy here
+data_id[is.na(data_id)] <- 0  
+
+names(data_id) <- gsub("p", "", names(data_id), fixed = TRUE)
+names(data_id) <- gsub("q", "", names(data_id), fixed = TRUE)
+
+
+agg_data <- pecanAggregate(data = data_id, nodes = 3:(n_nodes+2), edges = (3+n_nodes):ncol(data_id),  edges_sep = "_")
+
+
+ex_data <- pecanExtractAgg(agg_data, nodes_include = "per", edges_include = "per_oa", edges_direction = "to_from", edges_drop_NA0 = "per_oa")
+
+
+cen_data <- pecanCen(edges = ex_data$edges, nodes = ex_data$nodes, centrality_by = "per_oa")
+
+agg_list[[i]] <- agg_data 
+ex_list[[i]]  <- ex_data 
+cen_list[[i]] <- cen_data 
+
+
+m_list <- list()
+
+
+for (j in 1:nrow(data_id)) {
+current_df <- pecanExtract(data = data_id, 3:(n_nodes+2), edges = (3+n_nodes):ncol(data_id), edges_direction = "to_from", edges_sep = "_", drop_edges_NA0 = "none", id_row = j)
+
+
+day_list[[i]][[j]] <- current_df 
+
+m_list[[j]] <- tapply(current_df$edges$width, list(current_df$edges$from, current_df$edges$to), FUN = sum)
+
+#browser()
+
+}
+
+#browser()
+
+
+ 
+  ind <- length(m_list)
+  cor.vec.effect <- numeric(1000)
+  count <- 0
+  boot.mat.effect <- matrix(NA, 
+                            1000,
+                            length(seq(4, length(m_list), by = 2)))
+  boot.vec.effect <- numeric()
+  lower.effect <- numeric()
+  upper.effect <- numeric()
+
+#seq_list <- list()        
+
+  for(a in seq(4, length(m_list), by = 2)){ # starts at 4 ==> 2 days per matrix
+    
+        count <- count + 1
+        
+        for(b in 1:1000){
+          
+          
+         
+          v <- sample(1:ind, size = a, replace = FALSE)  # pick random days based on the size of the seq
+          v1 <- sample(v, size = a/2, replace = FALSE)  # randomly split these days
+          v2 <- v[!(v %in% v1)]
+          
+          
+          m1 <- Reduce(`+`, m_list[v1])/ length(v1)   # aggregate matrix 1
+          m2 <- Reduce(`+`, m_list[v2])/ length(v2) 
+          
+                 # correlation between the two matrices
+          
+          cor.vec.effect[b] <- cor(as.vector(m1),as.vector(m2), method = "spearman", use = "complete.obs") # correlation between the two matrices
+        }
+     
+  #      print(mean(cor.vec.effect, na.rm = TRUE)) # Print mean
+        
+        # Store bootstrap objects
+      boot.mat.effect[,count] <- cor.vec.effect
+      boot.vec.effect[count] <- mean(cor.vec.effect, na.rm = TRUE)
+      lower.effect[count] <- boot.vec.effect[count] - 1.96 * (sd(cor.vec.effect, na.rm = TRUE) / sqrt(1000))
+      upper.effect[count] <- boot.vec.effect[count] + 1.96 * (sd(cor.vec.effect, na.rm = TRUE) / sqrt(1000))
+        
+  
+ 
+            
+    }
+
+boot_results[[i]] <- list(boot.mat.effect = boot.mat.effect,
+                         boot.vec.effect = boot.vec.effect,
+                         lower.effect = lower.effect,
+                         upper.effect = upper.effect)
+
+
+drift.comb <- combn(1:nrow(data_id), 2)
+      cor.comb <- numeric()
+      dist.comb <- numeric()
+      slopes <- numeric()
+      cor.comb_j <- numeric()
+      dist.comb_j <- numeric()
+      slopes_j <- numeric()
+      
+      for(k in 1:ncol(drift.comb)){
+        # Matrices of the two currently selected days
+        m.comb1 <- as.vector(m_list[[drift.comb[1,k]]])[!is.na(as.vector(m_list[[drift.comb[1,k]]]))]
+        m.comb2 <- as.vector(m_list[[drift.comb[2,k]]])[!is.na(as.vector(m_list[[drift.comb[2,k]]]))]
+        
+        # Correlation between matrices
+        cor.comb[k] <- phi(table(factor(m.comb1, levels = c(0,1)),
+  factor(m.comb2, levels = c(0,1))))
+        cor.comb_j[k] <- jaccard(m.comb1,m.comb2)
+        
+        
+        
+        # Distance between time points
+        dist.comb[k] <- abs(drift.comb[1,k] - drift.comb[2,k])
+        }
+      
+      df.comb <- data.frame(correlation = unlist(cor.comb),
+                            distance = dist.comb)
+      df.comb_j <- data.frame(correlation = unlist(cor.comb_j),
+                            distance = dist.comb) 
+      
+  
+      # Store slope
+      if(length(na.omit(unlist(cor.comb))) > 0){
+        
+        res <- lm(unlist(cor.comb) ~ dist.comb)
+        slope_results[[i]] <- res$coefficients[2]
+      
+        }
+    
+      if(length(na.omit(unlist(cor.comb_j))) > 0){
+        res_j <- lm(unlist(cor.comb_j) ~ dist.comb)
+        slope_results_j[[i]] <- res_j$coefficients[2]
+      }
+      
+plot_results[[i]] <- ggplot(df.comb, aes(x=distance, y=correlation)) + 
+        geom_point() +
+        scale_y_continuous(limits = c(-0.4, 1), breaks = seq(-0.4, 1, by = 0.2)) +
+        scale_x_continuous(limits = c(0, NA), breaks = seq(0, max(df.comb$distance), by = 2)) +
+        geom_smooth(method=lm) +
+        theme(panel.background = element_blank()) +
+        ggtitle(paste0("Causal Drift Diagram ","Participant ", i)) +
+        labs(x = "difference in days", y = "Phi coefficient", title = paste0("Causal Drift Diagram ",i)) 
+
+plot_results_j[[i]] <- ggplot(df.comb_j, aes(x=distance, y=correlation)) + 
+        geom_point() +
+        scale_y_continuous(limits = c(-0.4, 1), breaks = seq(-0.4, 1, by = 0.2)) +
+        scale_x_continuous(limits = c(0, NA), breaks = seq(0, max(df.comb_j$distance), by = 2)) +
+        geom_smooth(method=lm) +
+        theme(panel.background = element_blank()) +
+        ggtitle(paste0("Causal Drift Diagram ","Participant ", i)) +
+        labs(x = "difference in days", y = "Jaccard Index", title = paste0("Causal Drift Diagram ",i))
+
+drift_results[[i]] <- df.comb 
+drift_results_j[[i]] <- df.comb_j 
+}
+```
+
+Create results object
+```{r}
+lpecan_results <- list()
+lpecan_results[["boot_results"]] <- boot_results
+lpecan_results[["drift_results"]] <- drift_results
+lpecan_results[["slope_results"]] <- slope_results
+lpecan_results[["plot_results"]] <- plot_results
+lpecan_results[["drift_results_j"]] <- drift_results_j
+lpecan_results[["slope_results_j"]] <- slope_results_j
+lpecan_results[["plot_results_j"]] <- plot_results_j
+#saveRDS(lpecan_results, file = "lpecan_results.Rda" )
+```
+
+
+Prepare Standardized Centrality Plots
+```{r}
+cen_list_s <- cen_list
+cen_plot_list_s <- list()
+
+for (i in unique(data$id)) {
+
+max_cen <- (nrow(cen_list_s[[i]]) - 1)
+  
+cen_list_s[[i]]$out_degree_color <- cen_list_s[[i]]$out_degree
+cen_list_s[[i]]$out_degree <- cen_list_s[[i]]$out_degree / max_cen
+
+color_max <- max(cen_list_s[[i]]$out_degree_color)
+  if(color_max != 10){
+  if(color_max < 10){cen_list_s[[i]]$out_degree_color <- cen_list_s[[i]]$out_degree_color * (10/color_max)}
+  if(color_max > 10){cen_list_s[[i]]$out_degree_color <- cen_list_s[[i]]$out_degree_color / (color_max/10)}}
+  
+if(min(cen_list_s[[i]]$out_degree_color) == 10){
+        rgb_i <- colorRamp(c("firebrick1","darkred"))((cen_list_s[[i]]$out_degree_color/10))} else{rgb_i <- colorRamp(c("firebrick1","darkred"))(
+          (cen_list_s[[i]]$out_degree_color - min(cen_list_s[[i]]$out_degree_color))/(10 - min(cen_list_s[[i]]$out_degree_color)))
+    } # browser()
+      i_colors <- rgb(rgb_i[, 1], rgb_i[, 2], rgb_i[, 3], maxColorValue = 255)
+
+cen_list_s[[i]]$out_degree_color <- i_colors
+cen_list_s[[i]] <- cen_list_s[[i]][order(as.numeric(cen_list_s[[i]]$id)), ]
+cen_list_s[[i]]$labels <- label_list[[i]]
+  
+cen_plot_list_s[[i]][["labels"]] <- ggplot(cen_list_s[[i]], aes(x= reorder(id,out_degree), y=out_degree, fill = out_degree_color)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_identity() +
+  geom_text(aes(label = labels), hjust = -0.1) +
+  coord_flip() +
+  ylim(0,1) +
+  theme_classic() + 
+  labs(y = "Out degree centrality", x = NULL) +
+  theme(axis.text.y = element_blank())
+
+cen_plot_list_s[[i]][["no_labels"]] <- ggplot(cen_list_s[[i]], aes(x= reorder(id,out_degree), y=out_degree, fill = out_degree_color)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_identity() +
+  coord_flip() +
+  ylim(0,1) +
+  theme_classic() + 
+  labs(y = "Out degree centrality", x = NULL) +
+  theme(axis.text.y = element_blank())
+}
+```
+
+Plot Standardized Centrality Plots
+```{r}
+for (i in unique(data$id)) {
+  
+
+    pdf(file = paste0("CenPlot_",i,"_",j,"_labels_stand_040126.pdf"))
+    plot(cen_plot_list_s[[i]]$labels)
+    dev.off()
+    
+    pdf(file = paste0("CenPlot_",i,"_",j,"_no_labels_stand_040126.pdf"))
+    plot(cen_plot_list_s[[i]]$no_labels)
+    dev.off()
+      
+  
+}
+```
+
+
+
+
+
+
+Prepare Centrality Plots
+```{r}
+cen_plot_list <- list()
+
+for (i in unique(data$id)) {
+
+cen_list[[i]]$out_degree_color <- cen_list[[i]]$out_degree
+
+
+color_max <- max(cen_list[[i]]$out_degree_color)
+  if(color_max != 10){
+  if(color_max < 10){cen_list[[i]]$out_degree_color <- cen_list[[i]]$out_degree_color * (10/color_max)}
+  if(color_max > 10){cen_list[[i]]$out_degree_color <- cen_list[[i]]$out_degree_color / (color_max/10)}}
+  
+if(min(cen_list[[i]]$out_degree_color) == 10){
+        rgb_i <- colorRamp(c("firebrick1","darkred"))((cen_list[[i]]$out_degree_color/10))} else{rgb_i <- colorRamp(c("firebrick1","darkred"))(
+          (cen_list[[i]]$out_degree_color - min(cen_list[[i]]$out_degree_color))/(10 - min(cen_list[[i]]$out_degree_color)))
+    } # browser()
+      i_colors <- rgb(rgb_i[, 1], rgb_i[, 2], rgb_i[, 3], maxColorValue = 255)
+
+cen_list[[i]]$out_degree_color <- i_colors
+cen_list[[i]] <- cen_list[[i]][order(as.numeric(cen_list[[i]]$id)), ]
+cen_list[[i]]$labels <- label_list[[i]]
+  
+cen_plot_list[[i]][["labels"]] <- ggplot(cen_list[[i]], aes(x= reorder(id,out_degree), y=out_degree, fill = out_degree_color)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_identity() +
+  geom_text(aes(label = labels), hjust = -0.1) +
+  coord_flip() +
+  ylim(0,5) +
+  theme_classic() + 
+  labs(y = "Out degree centrality", x = NULL) +
+  theme(axis.text.y = element_blank())
+
+cen_plot_list[[i]][["no_labels"]] <- ggplot(cen_list[[i]], aes(x= reorder(id,out_degree), y=out_degree, fill = out_degree_color)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_identity() +
+  coord_flip() +
+  ylim(0,5) +
+  theme_classic() + 
+  labs(y = "Out degree centrality", x = NULL) +
+  theme(axis.text.y = element_blank())
+}
+```
+
+Plot Centrality Plots
+```{r}
+for (i in unique(data$id)) {
+  
+
+    pdf(file = paste0("CenPlot_",i,"_",j,"_labels_040126.pdf"))
+    plot(cen_plot_list[[i]]$labels)
+    dev.off()
+    
+    pdf(file = paste0("CenPlot_",i,"_",j,"_no_labels_040126.pdf"))
+    plot(cen_plot_list[[i]]$no_labels)
+    dev.off()
+      
+  
+}
+```
+
+
+Prepare Causal sat. Plots
+```{r}
+plot_list_cs <- list()
+
+for (i in unique(data$id)) {
+  
+    data_plot <- as.data.frame(boot_results[[i]]$boot.mat.effect)
+    number_of_cols <- 
+    data_plot <- data_plot %>% pivot_longer(names_to = "day", values_to = "value", cols = 1:ncol(data_plot))
+    
+   
+    
+    data_plot$day <- as.factor(car::recode(data_plot$day,"'V1' = '4';
+                                               'V2' = '6';
+                                               'V3' = '8';
+                                              'V4' = '10';
+                                              'V5' = '12';
+                                              'V6' = '14';
+                                              'V7' = '16';
+                                              'V8' = '18';
+                                               'V9' = '20';
+                                                'V10' = '22';
+                                            'V11' = '24';
+                                             'V12' = '26';
+                                              'V13' = '28'
+                                           ")/2)
+    
+    mean_df <- data_plot %>%  group_by(day) %>%
+    summarise(mean_value = mean(value, na.rm = TRUE))
+    mean_df$fill <- rev(hcl.colors(length(unique(data_plot$day)),"SunsetDark"))   
+   
+   plot_list_cs[[i]] <- ggplot(data_plot, aes(x = factor(day), y = value)) +
+                          geom_col(data = mean_df, aes(x = day, y = mean_value, fill = fill), width = 0.3) +
+                          scale_y_continuous(limits = c(-0.4, 1), breaks = seq(-0.4, 1, by = 0.2)) +
+                          geom_violin(fill = "white", color = "black", scale = "width", alpha = 0.3, width = 0.3 ) +
+                          geom_jitter(width = 0.01, alpha = 0.4, size = 1) +
+                          stat_summary(fun = mean, geom = "point", shape = 21, fill = "black", size = 2) +
+                          scale_fill_identity() +
+                          labs(x = "number of days", y = "Correlation (Spearman)", title = paste0("Causal saturation diagram ",i)) +
+                          theme_minimal(base_size = 14)
+   
+  }
+```
+
+
+Plot Causal sat. plots and causal drift plots
+```{r}
+for (i in unique(data$id)) {
+  
+  name_dis_plot <- paste0(i,"_dis_plot_040126",".pdf") 
+  
+  pdf(name_dis_plot) 
+  plot(plot_results[[i]])
+  dev.off()
+  
+  
+  name_dis_plot_j <- paste0(i,"_dis_plot_jaccard_040126",".pdf") 
+  
+  pdf(name_dis_plot_j) 
+  plot(plot_results_j[[i]])
+  dev.off()
+  
+  
+  name_sat_plot <- paste0(i,"_sat_plot_040126",".pdf") 
+  
+  pdf(name_sat_plot) 
+  plot(plot_list_cs[[i]])
+  dev.off()
+    
+}
+```
+
+
+Prepare aggregated networks
+```{r}
+prep_list <- list()
+for (i in unique(data$id)) {
+  
+    
+    ex_list[[i]][["nodes"]] <- ex_list[[i]][["nodes"]][order(as.numeric(ex_list[[i]][["nodes"]]$id)), ]
+    ex_list[[i]][["nodes"]]$labels <- label_list[[i]]
+    
+    prep_list[[i]][["reg_no_labels"]] <- pecanPrepare(nodes = ex_list[[i]]$nodes, edges = ex_list[[i]]$edges,
+                                                         nodes_color = "red",edges_color_by = "per_oa",edges_color = list("lightgrey","black"),
+                                                         edges_color_scaling = "fixed", edges_color_max = 1, edges_width = "per_oa",edges_regulation = list(reg_by = "per_oa",
+                                                                                                                                        reg_type = "nodes", reg_value = 1))
+    
+    prep_list[[i]][["unreg_no_labels"]] <- pecanPrepare(nodes = ex_list[[i]]$nodes, edges = ex_list[[i]]$edges,nodes_color = "red",
+                                                           edges_color_by = "per_oa",edges_color = list("lightgrey","black"),edges_color_scaling = "fixed", edges_color_max = 1, edges_width = "per_oa")
+    
+    prep_list[[i]][["reg_labels"]]  <- pecanPrepare(nodes = ex_list[[i]]$nodes, edges = ex_list[[i]]$edges,nodes_label = "labels",
+                                                      nodes_color = "red", edges_color_by = "per_oa",edges_color = list("lightgrey","black"),
+                                                      edges_color_scaling = "fixed",edges_color_max = 1, edges_width = "per_oa",edges_regulation = list(reg_by = "per_oa",reg_type = "nodes",
+                                                                                                                                     reg_value = 1))
+    
+    prep_list[[i]][["unreg_labels"]]  <- pecanPrepare(nodes = ex_list[[i]]$nodes, edges = ex_list[[i]]$edges, nodes_label = "labels",
+                                                       nodes_color = "red", edges_color_by = "per_oa", edges_color = list("lightgrey","black"), 
+                                                       edges_color_scaling = "fixed",edges_color_max = 1, edges_width = "per_oa")
+
+}
+
+```
+
+
+Visualize aggregated networks
+```{r}
+for (i in unique(data$id)) {
+  
+  for (k in c("reg_no_labels","unreg_no_labels","unreg_labels","reg_labels")) {
+    
+vis <-visNetwork(nodes = prep_list[[i]][[k]]$nodes,edges = prep_list[[i]][[k]]$edges) %>% visEdges(arrows = "to")  %>% visIgraphLayout(layout = "layout_in_circle",smooth = list(enabled = TRUE, type = "curvedCCW", roundness = .1))
+
+  temp_html <- tempfile(fileext = ".html")
+  saveWidget(vis, file = temp_html, selfcontained = TRUE)
+  
+  # Start chromote session
+  b <- ChromoteSession$new()
+  b$Page$navigate(paste0("file://", normalizePath(temp_html)))
+  b$Page$loadEventFired()  # Wait for the page to load
+  
+  
+  pdf_name <- paste0("nw_",i,"_",k,"_040126",".pdf")
+  # Capture PDF
+  pdf_data <- b$Page$printToPDF(paperWidth = 800 / 96, paperHeight = 600 / 96)
+  writeBin(base64enc::base64decode(pdf_data$data), pdf_name)
+  
+  # Clean up
+  b$close()
+  }
+  
+}
+```
+
+
+Visualize individual networks with label
+```{r}
+ex_list_d <- list()
+
+for (i in unique(data$id)) {
+  data_id <- data %>% filter(id == i)
+  data_id <- data_id %>% select(id:p10_99)   
+  data_id[] <- lapply(data_id, as.numeric)
+  
+  
+  data_id <- data_id %>% rename(q1 = q20,
+                              q2 = q21,
+                              q3 = q22,
+                              q4 = q23,
+                              q5 = q24,
+                              q6 = q25,
+                              q7 = q26,
+                              q8 = q27,
+                              q9 = q28,
+                              q10 = q29) 
+
+  
+  n_nodes <- sum(colSums(!is.na(data_id[,3:12])) > 0)
+  max_nodes <- n_nodes + 2
+  
+  
+  first_index  <- as.integer(str_extract(names(data_id), "(?<=p)\\d+")) # digits preceded by p
+  second_index <- as.integer(str_extract(names(data_id), "(?<=_)\\d+")) # digits preceded by _
+
+  cols_to_drop <- names(data_id)[
+  str_detect(names(data_id), "^p\\d+_\\d+$") & # ^ = start; p = matches p; \\d+ = matches 1 or more digits; _ = matches _; #
+                                               #\\d+ = matches 1 or more digits; $ = end
+    (
+    first_index  > n_nodes |                    
+    second_index > n_nodes |                  # gets also rid of all the 99
+    first_index == second_index               # gets rid of "auto_cor"
+  )
+]
+ 
+  nodes_to_drop <- names(data_id[,which(names(data_id) == "q1"):which(names(data_id) =="q10")])[c(all(is.na(data_id$q1)),all(is.na(data_id$q2)),all(is.na(data_id$q3)),all(is.na(data_id$q4)),
+                          all(is.na(data_id$q5)),all(is.na(data_id$q6)),all(is.na(data_id$q7)),all(is.na(data_id$q8)),
+                          all(is.na(data_id$q9)),all(is.na(data_id$q10)))]
+  
+
+  
+data_id$q1 <- car::recode(data_id$q1,"0 = NA; 2 = NA; 4 = 1")  
+data_id$q2 <- car::recode(data_id$q2, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q3 <- car::recode(data_id$q3, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q4 <- car::recode(data_id$q4, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q5 <- car::recode(data_id$q5, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q6 <- car::recode(data_id$q6, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q7 <- car::recode(data_id$q7, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q8 <- car::recode(data_id$q8, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q9 <- car::recode(data_id$q9, "0 = NA; 2 = NA; 4 = 1")
+data_id$q10 <- car::recode(data_id$q10, "0 = NA; 2 = NA; 4 = 1")  
+  
+
+data_id <- data_id %>% select(-all_of(cols_to_drop))
+data_id <- data_id %>% select(-all_of(nodes_to_drop))
+data_id[] <- lapply(data_id, as.numeric)
+
+
+#data_id[,3:(2+n_nodes)] <- 1 # nodes just dummy here
+#data_id[is.na(data_id)] <- 0  
+
+names(data_id) <- gsub("p", "", names(data_id), fixed = TRUE)
+names(data_id) <- gsub("q", "", names(data_id), fixed = TRUE)
+
+
+
+for(j in 1:nrow(data_id)){
+    ex_list_d[[i]][[j]] <- pecanExtract(data = data_id,id_row = j, nodes = 3:max_nodes, edges = (max_nodes + 1):ncol(data_id),edges_direction = "to_from",
+                                      drop_nodes_NA0 = "none", drop_edges_NA0 = "na_zero", edges_sep = "_")
+    ex_list_d[[i]][[j]]$nodes$value <- car::recode(ex_list_d[[i]][[j]]$nodes$value, "NA = 0")
+    ex_list_d[[i]][[j]]$nodes$color <- ifelse(ex_list_d[[i]][[j]]$nodes$value == 1,"red","darkgrey")
+    ex_list_d[[i]][[j]]$nodes$label <- label_list[[i]]
+    
+    vis <-visNetwork(nodes = ex_list_d[[i]][[j]]$nodes,edges = ex_list_d[[i]][[j]]$edges) %>% visEdges(arrows = "to",color = "black")  %>% visIgraphLayout(layout = "layout_in_circle",smooth = list(enabled = TRUE, type = "curvedCCW", roundness = .1))
+
+  temp_html <- tempfile(fileext = ".html")
+  saveWidget(vis, file = temp_html, selfcontained = TRUE)
+  
+  # Start chromote session
+  b <- ChromoteSession$new()
+  b$Page$navigate(paste0("file://", normalizePath(temp_html)))
+  b$Page$loadEventFired()  # Wait for the page to load
+  
+  
+  pdf_name <- paste0("nw_",i,"_day",j,"_","_label_040126.pdf")
+  # Capture PDF
+  pdf_data <- b$Page$printToPDF(paperWidth = 800 / 96, paperHeight = 600 / 96)
+  writeBin(base64enc::base64decode(pdf_data$data), pdf_name)
+  
+  # Clean up
+  b$close()
+    
+    
+    
+    }
+  
+  }
+```
+
+
+Visualize individual networks without label
+```{r}
+ex_list_d <- list()
+
+for (i in unique(data$id)) {
+  data_id <- data %>% filter(id == i)
+  data_id <- data_id %>% select(id:p10_99)   
+  data_id[] <- lapply(data_id, as.numeric)
+  
+  
+  data_id <- data_id %>% rename(q1 = q20,
+                              q2 = q21,
+                              q3 = q22,
+                              q4 = q23,
+                              q5 = q24,
+                              q6 = q25,
+                              q7 = q26,
+                              q8 = q27,
+                              q9 = q28,
+                              q10 = q29) 
+
+  
+  n_nodes <- sum(colSums(!is.na(data_id[,3:12])) > 0)
+  max_nodes <- n_nodes + 2
+  
+  
+  first_index  <- as.integer(str_extract(names(data_id), "(?<=p)\\d+")) # digits preceded by p
+  second_index <- as.integer(str_extract(names(data_id), "(?<=_)\\d+")) # digits preceded by _
+
+  cols_to_drop <- names(data_id)[
+  str_detect(names(data_id), "^p\\d+_\\d+$") & # ^ = start; p = matches p; \\d+ = matches 1 or more digits; _ = matches _; #
+                                               #\\d+ = matches 1 or more digits; $ = end
+    (
+    first_index  > n_nodes |                    
+    second_index > n_nodes |                  # gets also rid of all the 99
+    first_index == second_index               # gets rid of "auto_cor"
+  )
+]
+ 
+  nodes_to_drop <- names(data_id[,which(names(data_id) == "q1"):which(names(data_id) =="q10")])[c(all(is.na(data_id$q1)),all(is.na(data_id$q2)),all(is.na(data_id$q3)),all(is.na(data_id$q4)),
+                          all(is.na(data_id$q5)),all(is.na(data_id$q6)),all(is.na(data_id$q7)),all(is.na(data_id$q8)),
+                          all(is.na(data_id$q9)),all(is.na(data_id$q10)))]
+  
+
+  
+data_id$q1 <- car::recode(data_id$q1,"0 = NA; 2 = NA; 4 = 1")  
+data_id$q2 <- car::recode(data_id$q2, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q3 <- car::recode(data_id$q3, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q4 <- car::recode(data_id$q4, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q5 <- car::recode(data_id$q5, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q6 <- car::recode(data_id$q6, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q7 <- car::recode(data_id$q7, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q8 <- car::recode(data_id$q8, "0 = NA; 2 = NA; 4 = 1") 
+data_id$q9 <- car::recode(data_id$q9, "0 = NA; 2 = NA; 4 = 1")
+data_id$q10 <- car::recode(data_id$q10, "0 = NA; 2 = NA; 4 = 1")  
+  
+
+data_id <- data_id %>% select(-all_of(cols_to_drop))
+data_id <- data_id %>% select(-all_of(nodes_to_drop))
+data_id[] <- lapply(data_id, as.numeric)
+
+
+#data_id[,3:(2+n_nodes)] <- 1 # nodes just dummy here
+#data_id[is.na(data_id)] <- 0  
+
+names(data_id) <- gsub("p", "", names(data_id), fixed = TRUE)
+names(data_id) <- gsub("q", "", names(data_id), fixed = TRUE)
+
+
+
+for(j in 1:nrow(data_id)){
+    ex_list_d[[i]][[j]] <- pecanExtract(data = data_id,id_row = j, nodes = 3:max_nodes, edges = (max_nodes + 1):ncol(data_id),edges_direction = "to_from",
+                                      drop_nodes_NA0 = "none", drop_edges_NA0 = "na_zero", edges_sep = "_")
+    ex_list_d[[i]][[j]]$nodes$value <- car::recode(ex_list_d[[i]][[j]]$nodes$value, "NA = 0")
+    ex_list_d[[i]][[j]]$nodes$color <- ifelse(ex_list_d[[i]][[j]]$nodes$value == 1,"red","darkgrey")
+    ex_list_d[[i]][[j]]$nodes$label <- ""
+    
+    vis <-visNetwork(nodes = ex_list_d[[i]][[j]]$nodes,edges = ex_list_d[[i]][[j]]$edges) %>% visEdges(arrows = "to",color = "black")  %>% visIgraphLayout(layout = "layout_in_circle",smooth = list(enabled = TRUE, type = "curvedCCW", roundness = .1))
+
+  temp_html <- tempfile(fileext = ".html")
+  saveWidget(vis, file = temp_html, selfcontained = TRUE)
+  
+  # Start chromote session
+  b <- ChromoteSession$new()
+  b$Page$navigate(paste0("file://", normalizePath(temp_html)))
+  b$Page$loadEventFired()  # Wait for the page to load
+  
+  
+  pdf_name <- paste0("nw_",i,"_day",j,"_","_no_label_040126.pdf")
+  # Capture PDF
+  pdf_data <- b$Page$printToPDF(paperWidth = 800 / 96, paperHeight = 600 / 96)
+  writeBin(base64enc::base64decode(pdf_data$data), pdf_name)
+  
+  # Clean up
+  b$close()
+    
+    
+    
+    }
+  
+  }
+```
+
+
+
+```{r}
+sessionInfo()
+```
+
+
+
+
+
+```{r}
+citation("visNetwork")
+
+```
+
+
+
+
+
+
+
+
+
